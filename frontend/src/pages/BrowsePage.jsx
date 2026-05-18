@@ -4,20 +4,20 @@ import axios from 'axios';
 import { Search, Filter, MapPin, Clock, Package, AlertCircle, X, Loader2, Map } from 'lucide-react';
 import './BrowsePage.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL;
 
 const CATEGORY_ICONS = {
-  Food:     '🍛',
+  Food: '🍛',
   Medicine: '💊',
-  Clothes:  '👕',
-  Grocery:  '🛒',
+  Clothes: '👕',
+  Grocery: '🛒',
 };
 
 const CATEGORY_COLORS = {
-  Food:     { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', text: '#10b981' },
-  Medicine: { bg: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.3)',  text: '#f87171' },
-  Clothes:  { bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.3)', text: '#60a5fa' },
-  Grocery:  { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.3)', text: '#fbbf24' },
+  Food: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)', text: '#10b981' },
+  Medicine: { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.3)', text: '#f87171' },
+  Clothes: { bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.3)', text: '#60a5fa' },
+  Grocery: { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.3)', text: '#fbbf24' },
 };
 
 function getTimeLeft(expiryTime) {
@@ -32,16 +32,16 @@ function getTimeLeft(expiryTime) {
 
 export default function BrowsePage() {
   const navigate = useNavigate();
-  const [donations, setDonations]   = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState('');
-  const [search, setSearch]         = useState('');
-  const [category, setCategory]     = useState('All');
+  const [donations, setDonations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('All');
   const [expirySoon, setExpirySoon] = useState(false);
-  const [maxKm, setMaxKm]           = useState(50);
-  const [userLat, setUserLat]       = useState(null);
-  const [userLng, setUserLng]       = useState(null);
-  const [locStatus, setLocStatus]   = useState('idle'); // idle | loading | done | denied
+  const [maxKm, setMaxKm] = useState(50);
+  const [userLat, setUserLat] = useState(null);
+  const [userLng, setUserLng] = useState(null);
+  const [locStatus, setLocStatus] = useState('idle'); // idle | loading | done | denied
   const [selectedDon, setSelectedDon] = useState(null);
   const [requesting, setRequesting] = useState(false);
 

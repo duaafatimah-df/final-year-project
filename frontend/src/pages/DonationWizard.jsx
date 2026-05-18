@@ -7,7 +7,7 @@ import { organizations } from './Home';
 import axios from 'axios';
 import './DonationWizard.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL;
 
 const DonationWizard = () => {
   const { orgId } = useParams();
@@ -101,8 +101,8 @@ const DonationWizard = () => {
   const org = staticOrg
     ? { id: staticOrg.id, name: staticOrg.name, logo: staticOrg.logo }
     : dbOrg
-    ? { id: dbOrg._id, name: dbOrg.name, logo: null }
-    : null;
+      ? { id: dbOrg._id, name: dbOrg.name, logo: null }
+      : null;
 
   if (!org) {
     return (

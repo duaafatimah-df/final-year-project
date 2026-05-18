@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Loader2, AlertCircle, MapPin, CheckCircle } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL;
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 function loadGoogleMaps(apiKey) {
@@ -133,7 +133,7 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
 
       marker.addListener('click', () => {
         if (!isRejected && onSelectReceiver) {
-           onSelectReceiver(rec);
+          onSelectReceiver(rec);
         }
         infoWindowRef.current.setContent(`
           <div style="font-family:Inter,sans-serif;padding:6px;max-width:180px;">

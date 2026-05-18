@@ -4,11 +4,11 @@ import axios from 'axios';
 import { X, Filter, MapPin, Clock, Package, Loader2, AlertCircle, List } from 'lucide-react';
 import './MapPage.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL;
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const CATEGORY_ICONS_EMOJI = { Food: '🍛', Medicine: '💊', Clothes: '👕', Grocery: '🛒' };
-const CATEGORY_COLORS_HEX  = { Food: '#10b981', Medicine: '#ef4444', Clothes: '#3b82f6', Grocery: '#f59e0b' };
+const CATEGORY_COLORS_HEX = { Food: '#10b981', Medicine: '#ef4444', Clothes: '#3b82f6', Grocery: '#f59e0b' };
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371, toRad = x => (x * Math.PI) / 180;
@@ -320,7 +320,7 @@ export default function MapPage() {
                   <li>Visit <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer">console.cloud.google.com</a></li>
                   <li>Enable "Maps JavaScript API"</li>
                   <li>Create an API Key under Credentials</li>
-                  <li>Add to <code>frontend/.env</code>: <br/><code>VITE_GOOGLE_MAPS_API_KEY=your_key</code></li>
+                  <li>Add to <code>frontend/.env</code>: <br /><code>VITE_GOOGLE_MAPS_API_KEY=your_key</code></li>
                   <li>Restart the dev server</li>
                 </ol>
               </div>

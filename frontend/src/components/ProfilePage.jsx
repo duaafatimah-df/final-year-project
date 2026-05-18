@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './ProfilePage.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL;
 
 const ProfilePage = ({ onClose }) => {
   const { user, login } = useAuth();

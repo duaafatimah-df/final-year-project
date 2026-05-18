@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import './AdminPortal.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL;
 const weeklyData = [
   { name: 'Mon', donations: 40, requests: 24 },
   { name: 'Tue', donations: 30, requests: 13 },
@@ -128,7 +128,7 @@ const AdminPortal = () => {
 
       <aside className="admin-sidebar">
         <div className="admin-logo">
-          <img src="/logo.png" alt="SpareShare" onError={e => e.target.style.display='none'} />
+          <img src="/logo.png" alt="SpareShare" onError={e => e.target.style.display = 'none'} />
           <span>Admin Panel</span>
         </div>
         <nav className="admin-nav">
@@ -184,8 +184,8 @@ const AdminPortal = () => {
                     <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
                     <YAxis stroke="#94a3b8" fontSize={12} />
                     <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 10 }} />
-                    <Bar dataKey="donations" fill="#3b82f6" radius={[6,6,0,0]} name="Donations" />
-                    <Bar dataKey="requests" fill="#10b981" radius={[6,6,0,0]} name="Requests" />
+                    <Bar dataKey="donations" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Donations" />
+                    <Bar dataKey="requests" fill="#10b981" radius={[6, 6, 0, 0]} name="Requests" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -232,8 +232,8 @@ const AdminPortal = () => {
                         {u.isBlocked
                           ? <span className="pending-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>🚫 Blocked</span>
                           : u.isVerified
-                          ? <span className="verified-badge"><ShieldCheck size={12} /> Verified</span>
-                          : <span className="pending-badge"><Clock size={12} /> Pending</span>}
+                            ? <span className="verified-badge"><ShieldCheck size={12} /> Verified</span>
+                            : <span className="pending-badge"><Clock size={12} /> Pending</span>}
                       </td>
                       <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{new Date(u.createdAt).toLocaleDateString()}</td>
                       <td>

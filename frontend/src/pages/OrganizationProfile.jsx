@@ -44,7 +44,7 @@ const OrganizationProfile = () => {
       // Fetch org from database
       const fetchOrg = async () => {
         try {
-          const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+          const API = import.meta.env.VITE_API_URL;
           const res = await axios.get(`${API}/api/users/org/${id}`);
           setDbOrg(res.data.org);
           setDbPosts(res.data.posts || []);
@@ -89,18 +89,18 @@ const OrganizationProfile = () => {
   // Build a unified org object from static OR db
   const org = staticOrg
     ? {
-        name: staticOrg.name,
-        type: staticOrg.type,
-        city: staticOrg.city,
-        desc: staticOrg.desc,
-        image: staticOrg.image,
-        logo: staticOrg.logo,
-        email: staticOrg.email || '',
-        phone: staticOrg.phone || '',
-        isFromDb: false,
-      }
+      name: staticOrg.name,
+      type: staticOrg.type,
+      city: staticOrg.city,
+      desc: staticOrg.desc,
+      image: staticOrg.image,
+      logo: staticOrg.logo,
+      email: staticOrg.email || '',
+      phone: staticOrg.phone || '',
+      isFromDb: false,
+    }
     : dbOrg
-    ? {
+      ? {
         name: dbOrg.name,
         type: dbOrg.orgType || 'Organization',
         city: dbOrg.city || localStorage.getItem(`city_${dbOrg._id}`) || 'Pakistan',
@@ -111,7 +111,7 @@ const OrganizationProfile = () => {
         phone: dbOrg.phone || '',
         isFromDb: true,
       }
-    : null;
+      : null;
 
   // NOT FOUND STATE
   if (!org) {
@@ -162,7 +162,7 @@ const OrganizationProfile = () => {
                 <Globe size={16} />
                 {lang === 'Eng' ? 'English' : 'اردو'}
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}>
-                  <path d="M1 3L5 7L9 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M1 3L5 7L9 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
               <div
@@ -276,9 +276,9 @@ const OrganizationProfile = () => {
                         ? <AlertCircle size={20} color={post.status === 'Fulfilled' ? '#10b981' : '#ef4444'} />
                         : <Camera size={20} />}
                     </div>
-                    <div className="update-text" style={{flex: 1}}>
-                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px'}}>
-                        <strong style={{color: 'var(--text-main)'}}>{post.title}</strong>
+                    <div className="update-text" style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <strong style={{ color: 'var(--text-main)' }}>{post.title}</strong>
                         <span className={`post-status-pill ${(post.status || 'active').toLowerCase()}`}>{t(lang, post.status || 'Active', post.status === 'Fulfilled' ? 'مکمل' : 'فعال')}</span>
                       </div>
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>{post.desc}</p>
@@ -320,7 +320,7 @@ const OrganizationProfile = () => {
             <p>{t(lang, 'Select what you want to donate. Items will be verified by AI before delivery.', 'منتخب کریں کہ آپ کیا عطیہ کرنا چاہتے ہیں۔ ڈیلیوری سے پہلے اے آئی سے تصدیق ہوگی۔')}</p>
 
             <div className="impact-options">
-              {[t(lang,'Food & Rations','خوراک اور راشن'), t(lang,'Clothing','کپڑے'), t(lang,'Medical Supplies','طبی سامان')].map(cat => (
+              {[t(lang, 'Food & Rations', 'خوراک اور راشن'), t(lang, 'Clothing', 'کپڑے'), t(lang, 'Medical Supplies', 'طبی سامان')].map(cat => (
                 <div
                   key={cat}
                   className={`impact-btn ${selectedCategories.includes(cat) ? 'selected' : ''}`}
