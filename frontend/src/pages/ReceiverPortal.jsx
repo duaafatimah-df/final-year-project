@@ -12,6 +12,8 @@ import {
 import ProfilePage from '../components/ProfilePage';
 import './ReceiverPortal.css';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const ReceiverPortal = () => {
   const { user, logout } = useAuth();
   const { lang, setLang } = useLang();
@@ -67,14 +69,14 @@ const ReceiverPortal = () => {
 
   const fetchMyPosts = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/posts/my-posts');
+      const res = await axios.get(`${API}/api/posts/my-posts`);
       setMyPosts(res.data);
     } catch (err) { console.error('Error fetching posts', err); }
   };
 
   const fetchIncoming = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/donations/incoming',
+      const res = await axios.get(`${API}/api/donations/incoming`,
         { headers: { 'x-auth-token': localStorage.getItem('token') } });
       setIncomingRequests(res.data);
     } catch (err) { console.error('Error fetching incoming', err); }
@@ -82,7 +84,7 @@ const ReceiverPortal = () => {
 
   const fetchCompleted = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/donations/completed',
+      const res = await axios.get(`${API}/api/donations/completed`,
         { headers: { 'x-auth-token': localStorage.getItem('token') } });
       setCompletedDonations(res.data);
     } catch (err) { console.error('Error fetching completed', err); }
@@ -90,7 +92,7 @@ const ReceiverPortal = () => {
 
   const fetchAiMatches = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/donations/ai-matched',
+      const res = await axios.get(`${API}/api/donations/ai-matched`,
         { headers: { 'x-auth-token': localStorage.getItem('token') } });
       setAiMatches(res.data);
     } catch (err) { console.error('Error fetching AI matches', err); }
@@ -103,7 +105,7 @@ const ReceiverPortal = () => {
 
   const handleAcceptRequest = async (reqId, donorDetails) => {
     try {
-      await axios.put(`http://localhost:5000/api/donations/${reqId}/status`,
+      await axios.put(`${API}/api/donations/${reqId}/status`,
         { status: 'accepted' },
         { headers: { 'x-auth-token': localStorage.getItem('token') } }
       );
@@ -116,7 +118,7 @@ const ReceiverPortal = () => {
 
   const handleRejectRequest = async (reqId) => {
     try {
-      await axios.put(`http://localhost:5000/api/donations/${reqId}/status`,
+      await axios.put(`${API}/api/donations/${reqId}/status`,
         { status: 'rejected' },
         { headers: { 'x-auth-token': localStorage.getItem('token') } }
       );
@@ -129,7 +131,7 @@ const ReceiverPortal = () => {
     e.preventDefault();
     if (!newPostTitle) return;
     try {
-      const res = await axios.post('http://localhost:5000/api/posts', {
+      const res = await axios.post(`${API}/api/posts`, {
         title: newPostTitle,
         urgency: newPostUrgency,
         desc: newPostDesc || 'No description provided.'
@@ -143,7 +145,7 @@ const ReceiverPortal = () => {
   const togglePostStatus = async (post) => {
     const newStatus = post.status === 'Fulfilled' ? 'Active' : 'Fulfilled';
     try {
-      await axios.put(`http://localhost:5000/api/posts/${post._id}/status`, { status: newStatus });
+      await axios.put(`${API}/api/posts/${post._id}/status`, { status: newStatus });
       setMyPosts(myPosts.map(p => p._id === post._id ? { ...p, status: newStatus } : p));
     } catch (err) { console.error(err); }
   };

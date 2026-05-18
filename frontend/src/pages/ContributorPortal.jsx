@@ -15,6 +15,8 @@ import ProfilePage from '../components/ProfilePage';
 import SmartMap from '../components/SmartMap';
 import './ContributorPortal.css';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 // Mock Data for Charts
 const monthlyData = [
   { name: 'Week 1', scans: 45 },
@@ -66,7 +68,7 @@ const ContributorPortal = () => {
     setIsTranslatingDesc(true);
     setTranslationError('');
     try {
-      const res = await axios.post('http://localhost:5000/api/ai/translate', {
+      const res = await axios.post(`${API}/api/ai/translate`, {
         text: description,
         targetLang: lang === 'Eng' ? 'ur' : 'en'
       });
@@ -111,7 +113,7 @@ const ContributorPortal = () => {
   const [aiSuggestion, setAiSuggestion] = useState('');
   useEffect(() => {
     if (user?.userId) {
-      axios.get(`http://localhost:5000/api/ai/suggest-donation?userId=${user.userId}`)
+      axios.get(`${API}/api/ai/suggest-donation?userId=${user.userId}`)
         .then(res => setAiSuggestion(res.data.primary || 'Donate food today to help your community!'))
         .catch(() => setAiSuggestion('Donate food today to help your community!'));
     }
@@ -120,10 +122,10 @@ const ContributorPortal = () => {
   // Fetch active receiver posts and verified orgs
   const fetchData = async () => {
     try {
-      const postsRes = await axios.get('http://localhost:5000/api/posts/active');
+      const postsRes = await axios.get(`${API}/api/posts/active`);
       setReceiverDemands(postsRes.data);
 
-      const orgsRes = await axios.get('http://localhost:5000/api/users/receivers');
+      const orgsRes = await axios.get(`${API}/api/users/receivers`);
       const formattedStaticOrgs = organizations.map(org => ({
         ...org,
         _id: org.id,
@@ -133,7 +135,7 @@ const ContributorPortal = () => {
       setVerifiedOrgs([...formattedStaticOrgs, ...orgsRes.data]);
 
       // Fetch donor's own donations
-      const donRes = await axios.get('http://localhost:5000/api/donations/my-donations', {
+      const donRes = await axios.get(`${API}/api/donations/my-donations`, {
         headers: { 'x-auth-token': localStorage.getItem('token') }
       });
       setMyDonations(donRes.data);
@@ -149,7 +151,7 @@ const ContributorPortal = () => {
   const handleDeleteDonation = async (id, e) => {
     if (e) e.stopPropagation();
     try {
-      await axios.delete(`http://localhost:5000/api/donations/${id}`, {
+      await axios.delete(`${API}/api/donations/${id}`, {
         headers: { 'x-auth-token': localStorage.getItem('token') }
       });
       setMyDonations(prev => prev.filter(d => d._id !== id));
@@ -162,7 +164,7 @@ const ContributorPortal = () => {
   const handleUpdateStatus = async (id, newStatus, e) => {
     if (e) e.stopPropagation();
     try {
-      await axios.put(`http://localhost:5000/api/donations/${id}/status`, { status: newStatus }, {
+      await axios.put(`${API}/api/donations/${id}/status`, { status: newStatus }, {
         headers: { 'x-auth-token': localStorage.getItem('token') }
       });
       setMyDonations(prev => prev.map(d => d._id === id ? { ...d, status: newStatus } : d));
@@ -229,7 +231,7 @@ const ContributorPortal = () => {
     reader.onload = async () => {
       try {
         const imageUrl = reader.result;
-        const res = await axios.post('http://localhost:5000/api/donations', {
+        const res = await axios.post(`${API}/api/donations`, {
           title: donTitle,
           category,
           itemType: itemType || category,
@@ -279,7 +281,7 @@ const ContributorPortal = () => {
       return;
     }
     try {
-      await axios.put(`http://localhost:5000/api/donations/${currentDonationId}/dispatch`, {
+      await axios.put(`${API}/api/donations/${currentDonationId}/dispatch`, {
         receiverId: post.receiverId._id || post.receiverId
       }, { headers: { 'x-auth-token': localStorage.getItem('token') } });
       alert(`Success! Dispatch Notification sent to ${post.receiverId?.name || 'the NGO'}. They will contact you shortly to coordinate.`);

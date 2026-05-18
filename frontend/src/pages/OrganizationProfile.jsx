@@ -44,7 +44,8 @@ const OrganizationProfile = () => {
       // Fetch org from database
       const fetchOrg = async () => {
         try {
-          const res = await axios.get(`http://localhost:5000/api/users/org/${id}`);
+          const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+          const res = await axios.get(`${API}/api/users/org/${id}`);
           setDbOrg(res.data.org);
           setDbPosts(res.data.posts || []);
         } catch (err) {

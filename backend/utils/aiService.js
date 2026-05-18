@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const AI_URL = 'http://localhost:8000/ai';
+const AI_URL = process.env.AI_URL || 'http://localhost:8000/ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 

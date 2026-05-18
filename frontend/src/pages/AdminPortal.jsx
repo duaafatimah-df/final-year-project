@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import './AdminPortal.css';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const weeklyData = [
   { name: 'Mon', donations: 40, requests: 24 },
   { name: 'Tue', donations: 30, requests: 13 },

@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import './ProfilePage.css';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const ProfilePage = ({ onClose }) => {
   const { user, login } = useAuth();
   const fileRef = useRef(null);
@@ -25,7 +27,7 @@ const ProfilePage = ({ onClose }) => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/users/me', {
+        const res = await axios.get(`${API}/api/users/me`, {
           headers: { 'x-auth-token': localStorage.getItem('token') }
         });
         const u = res.data;
@@ -52,7 +54,7 @@ const ProfilePage = ({ onClose }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await axios.put('http://localhost:5000/api/users/me',
+      const res = await axios.put(`${API}/api/users/me`,
         { name, phone, bio, city, profilePic },
         { headers: { 'x-auth-token': localStorage.getItem('token') } }
       );

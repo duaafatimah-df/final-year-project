@@ -7,6 +7,8 @@ import { organizations } from './Home';
 import axios from 'axios';
 import './DonationWizard.css';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const DonationWizard = () => {
   const { orgId } = useParams();
   const [searchParams] = useSearchParams();
@@ -34,7 +36,7 @@ const DonationWizard = () => {
 
   useEffect(() => {
     if (!staticOrg) {
-      axios.get(`http://localhost:5000/api/users/org/${orgId}`)
+      axios.get(`${API}/api/users/org/${orgId}`)
         .then(res => setDbOrg(res.data.org))
         .catch(err => console.error(err))
         .finally(() => setLoadingOrg(false));
@@ -67,7 +69,7 @@ const DonationWizard = () => {
     try {
       setSubmitting(true);
       const receiverId = dbOrg?._id || null; // only for DB orgs
-      await axios.post('http://localhost:5000/api/donations', {
+      await axios.post(`${API}/api/donations`, {
         receiverId,
         orgName: org?.name,
         title: `Donation: ${categoriesParam}`,

@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Search, Filter, MapPin, Clock, Package, AlertCircle, X, Loader2, Map } from 'lucide-react';
 import './BrowsePage.css';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const CATEGORY_ICONS = {
   Food:     '🍛',
