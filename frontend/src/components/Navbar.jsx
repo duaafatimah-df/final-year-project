@@ -1,0 +1,118 @@
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth, useLang } from '../context/AuthContext';
+import { ArrowRight, LogOut, LayoutDashboard, Globe } from 'lucide-react';
+import './Navbar.css';
+
+const t = (lang, enText, urText) => lang === 'Eng' ? enText : urText;
+
+const Navbar = () => {
+  const { user, logout } = useAuth();
+  const { lang, setLang } = useLang();
+  const navigate = useNavigate();
+
+  return (
+    <nav className="navbar">
+      <div className="container nav-container">
+        <Link to="/" className="nav-logo">
+          <img src="/logo.png" alt="SpareShare Logo" className="logo-img-large" />
+          <span className="logo-text">SpareShare AI</span>
+        </Link>
+
+        <div className="nav-links">
+          <Link to="/" className="nav-link">{t(lang, 'Explore', 'تلاش کریں')}</Link>
+          <a href="/#about" className="nav-link">{t(lang, 'About', 'ہمارے بارے میں')}</a>
+          <Link to="/zakat" className="nav-link text-green-accent">{t(lang, 'Zakat Calculator', 'زکوٰۃ کیلکولیٹر')}</Link>
+        </div>
+
+        <div className="nav-actions">
+          <div className="lang-dropdown-wrapper" style={{ position: 'relative', marginRight: '1rem' }} onClick={(e) => {
+            const menu = document.getElementById('navbar-lang-menu');
+            if (menu) menu.classList.toggle('open');
+            e.stopPropagation();
+          }}>
+            <button
+              className="lang-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600 }}
+            >
+              <Globe size={16} />
+              {lang === 'Eng' ? 'Eng' : 'اردو'}
+            </button>
+            <div
+              id="navbar-lang-menu"
+              style={{
+                position: 'absolute', top: '110%', right: 0, zIndex: 999,
+                background: 'white', borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                minWidth: '130px', overflow: 'hidden', display: 'none'
+              }}
+              className="lang-menu"
+            >
+              <button
+                onClick={() => { setLang('Eng'); document.getElementById('navbar-lang-menu').classList.remove('open'); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', padding: '10px 16px', border: 'none',
+                  background: lang === 'Eng' ? '#f0fdf4' : 'white',
+                  color: lang === 'Eng' ? '#10b981' : '#1e293b',
+                  fontWeight: lang === 'Eng' ? 700 : 500,
+                  cursor: 'pointer', textAlign: 'left', fontSize: '0.9rem',
+                  borderBottom: '1px solid #f1f5f9'
+                }}
+              >
+                🇬🇧 English
+              </button>
+              <button
+                onClick={() => { setLang('اردو'); document.getElementById('navbar-lang-menu').classList.remove('open'); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  width: '100%', padding: '10px 16px', border: 'none',
+                  background: lang !== 'Eng' ? '#f0fdf4' : 'white',
+                  color: lang !== 'Eng' ? '#10b981' : '#1e293b',
+                  fontWeight: lang !== 'Eng' ? 700 : 500,
+                  cursor: 'pointer', textAlign: 'right', fontSize: '0.9rem',
+                  direction: 'rtl', fontFamily: 'var(--font-urdu, serif)'
+                }}
+              >
+                🇵🇰 اردو
+              </button>
+            </div>
+          </div>
+
+          {!user ? (
+            <>
+              <Link to="/auth/donor" className="nav-btn nav-btn-outline">
+                {t(lang, 'Donor Login', 'ڈونر لاگ ان')} <ArrowRight size={15} />
+              </Link>
+              <Link to="/auth/receiver" className="nav-btn nav-btn-solid">
+                {t(lang, 'Receiver Signup', 'وصول کنندہ سائن اپ')} <ArrowRight size={15} />
+              </Link>
+            </>
+          ) : (
+            <div className="user-menu">
+              <span className="user-greeting">{t(lang, 'Hi', 'سلام')}, {user.name?.split(' ')[0]}</span>
+              <button
+                onClick={() => navigate(user.role === 'donor' ? '/contributor' : user.role === 'admin' ? '/admin' : '/receiver')}
+                className="nav-btn nav-btn-outline"
+              >
+                <LayoutDashboard size={15} /> {t(lang, 'Dashboard', 'ڈیش بورڈ')}
+              </button>
+              <button onClick={logout} className="nav-btn" style={{ color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '7px 14px' }}>
+                <LogOut size={15} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+// Global click listener to close menu
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('navbar-lang-menu');
+  if (menu && !e.target.closest('.lang-dropdown-wrapper')) {
+    menu.classList.remove('open');
+  }
+});
+
+export default Navbar;

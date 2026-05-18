@@ -1,0 +1,262 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-main: #0a0f1a;
+  --bg-surface: #111827;
+  --bg-card: #1a2236;
+  --bg-card-hover: #1f2d47;
+  --bg-glass: rgba(255,255,255,0.04);
+
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --primary: #10b981;
+  --primary-light: #34d399;
+  --primary-dark: #059669;
+  --primary-glow: rgba(16, 185, 129, 0.25);
+  --secondary: #064e3b;
+  --accent-gold: #f59e0b;
+  --accent-blue: #3b82f6;
+  --danger: #ef4444;
+
+  --border-color: rgba(255,255,255,0.08);
+  --border-glow: rgba(16,185,129,0.3);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 40px rgba(16,185,129,0.15);
+
+  --font-heading: 'Outfit', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-main);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ── Container ── */
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--transition);
+  border: none;
+  text-decoration: none;
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.08);
+  opacity: 0;
+  transition: opacity 0.2s;
+  border-radius: inherit;
+}
+.btn:hover::before { opacity: 1; }
+
+.btn-primary {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: white;
+  box-shadow: 0 4px 15px rgba(16,185,129,0.3);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(16,185,129,0.45);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+.btn-outline:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-glow);
+  transform: translateY(-1px);
+}
+
+.btn-text {
+  background: transparent;
+  color: var(--primary);
+  padding: 0.5rem 1rem;
+}
+.btn-text:hover { background: var(--primary-glow); }
+
+/* ── Glass Panel ── */
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Text utilities ── */
+.text-primary { color: var(--primary) !important; }
+.text-muted { color: var(--text-muted) !important; }
+.text-gradient {
+  background: linear-gradient(135deg, #10b981, #34d399, #6ee7b7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Form elements ── */
+.form-group { margin-bottom: 1.25rem; }
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-icon {
+  position: absolute;
+  left: 13px;
+  color: var(--text-dim);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.input-field {
+  width: 100%;
+  padding: 11px 14px 11px 40px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  transition: var(--transition);
+  outline: none;
+  box-sizing: border-box;
+}
+.input-field:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: rgba(16,185,129,0.05);
+}
+.input-field::placeholder { color: var(--text-dim); }
+.input-field.with-icon { padding-left: 40px; }
+
+select.input-field option {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 var(--primary-glow); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 12px rgba(16,185,129,0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(16,185,129,0.2); }
+  50%       { box-shadow: 0 0 40px rgba(16,185,129,0.5); }
+}
+
+.animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+.animate-float   { animation: float 4s ease-in-out infinite; }
+
+/* ── Custom form inputs (donation form) ── */
+.custom-select, .custom-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+.custom-select:focus, .custom-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.custom-select option { background: var(--bg-card); color: var(--text-main); }
+.custom-input::placeholder { color: var(--text-dim); }
