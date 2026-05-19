@@ -6,3 +6,4 @@ deep-translator==1.11.4
 python-dotenv==1.0.0
 pytesseract>=0.3.10
 opencv-python-headless>=4.10.0
+tensorflow-cpu>=2.21.0
