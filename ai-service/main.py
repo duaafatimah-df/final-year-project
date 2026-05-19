@@ -28,7 +28,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+@app.get("/")
+def root():
+    return {"message": "AI Service Running 🚀"}
 print("Loading MobileNetV2...")
 mobilenet_model = MobileNetV2(weights='imagenet')
 print("MobileNetV2 Loaded successfully.")

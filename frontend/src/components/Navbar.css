@@ -124,3 +124,37 @@
   font-weight: 600;
   color: rgba(255,255,255,0.65);
 }
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .nav-container {
+    height: 60px;
+    gap: 0.5rem;
+    padding: 0 1rem;
+    justify-content: space-between;
+  }
+  .nav-links {
+    display: none; /* Hide desktop link tags to prevent squishing */
+  }
+  .logo-text {
+    font-size: 0.95rem;
+  }
+  .logo-img-large {
+    width: 32px;
+    height: 32px;
+  }
+  .nav-actions {
+    gap: 0.35rem;
+  }
+  .nav-btn {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+  }
+  .lang-btn {
+    font-size: 0.8rem !important;
+  }
+  .user-greeting {
+    display: none; /* Hide greeting to save space */
+  }
+}
+
