@@ -20,7 +20,9 @@ import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input, decode_predictions
 
 app = FastAPI(title="SpareShare AI Microservice", version="3.0.0")
-
+@app.get("/")
+def root():
+    return {"message": "AI Service Running "}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,9 +30,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-@app.get("/")
-def root():
-    return {"message": "AI Service Running 🚀"}
+
 print("Loading MobileNetV2...")
 mobilenet_model = MobileNetV2(weights='imagenet')
 print("MobileNetV2 Loaded successfully.")
