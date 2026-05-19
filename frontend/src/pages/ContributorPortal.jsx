@@ -15,7 +15,7 @@ import ProfilePage from '../components/ProfilePage';
 import SmartMap from '../components/SmartMap';
 import './ContributorPortal.css';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "https://spareshare-ai.up.railway.app";
 
 // Mock Data for Charts
 const monthlyData = [

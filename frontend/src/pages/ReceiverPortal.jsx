@@ -12,7 +12,7 @@ import {
 import ProfilePage from '../components/ProfilePage';
 import './ReceiverPortal.css';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "https://spareshare-ai.up.railway.app";
 
 const ReceiverPortal = () => {
   const { user, logout } = useAuth();

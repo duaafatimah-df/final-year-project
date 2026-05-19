@@ -4,7 +4,7 @@ import axios from 'axios';
 import { X, Filter, MapPin, Clock, Package, Loader2, AlertCircle, List } from 'lucide-react';
 import './MapPage.css';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "https://spareshare-ai.up.railway.app";
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const CATEGORY_ICONS_EMOJI = { Food: '🍛', Medicine: '💊', Clothes: '👕', Grocery: '🛒' };

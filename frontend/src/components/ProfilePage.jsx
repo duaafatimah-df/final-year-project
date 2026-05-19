@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './ProfilePage.css';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "https://spareshare-ai.up.railway.app";
 
 const ProfilePage = ({ onClose }) => {
   const { user, login } = useAuth();

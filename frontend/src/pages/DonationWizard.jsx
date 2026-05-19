@@ -7,7 +7,7 @@ import { organizations } from './Home';
 import axios from 'axios';
 import './DonationWizard.css';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "https://spareshare-ai.up.railway.app";
 
 const DonationWizard = () => {
   const { orgId } = useParams();
