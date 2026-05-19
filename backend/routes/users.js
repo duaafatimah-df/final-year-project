@@ -26,7 +26,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 // PUT /api/users/me
 router.put('/me', authMiddleware, async (req, res) => {
   try {
-    const { name, phone, bio, city, profilePic } = req.body;
+    const { name, phone, bio, city, profilePic, profileBanner } = req.body;
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (name) user.name = name;
@@ -34,6 +34,7 @@ router.put('/me', authMiddleware, async (req, res) => {
     if (bio !== undefined) user.bio = bio;
     if (city !== undefined) user.city = city;
     if (profilePic !== undefined) user.profilePic = profilePic;
+    if (profileBanner !== undefined) user.profileBanner = profileBanner;
     await user.save();
     const updatedUser = user.toObject();
     delete updatedUser.password;

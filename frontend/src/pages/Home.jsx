@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Leaf, ShieldCheck, Cpu, Heart, CheckCircle2, Filter, MapPin, Zap, Users, Package, UploadCloud, Search, Handshake } from 'lucide-react';
 import { useLang } from '../context/AuthContext';
+import axios from 'axios';
 import './Home.css';
 
 const t = (lang, en, ur) => lang === 'Eng' ? en : ur;
@@ -39,13 +40,41 @@ const Home = () => {
   const navigate = useNavigate();
   const { lang } = useLang();
   const [selectedCity, setSelectedCity] = useState('All');
+  const [dbReceivers, setDbReceivers] = useState([]);
+
+  useEffect(() => {
+    const fetchReceivers = async () => {
+      try {
+        const API = "https://spareshare-ai.up.railway.app";
+        const res = await axios.get(`${API}/api/users/receivers`);
+        setDbReceivers(res.data);
+      } catch (err) {
+        console.error("Failed to fetch receivers", err);
+      }
+    };
+    fetchReceivers();
+  }, []);
+
+  const combinedOrgs = [
+    ...organizations,
+    ...dbReceivers.map(r => ({
+      id: r._id,
+      name: r.name,
+      type: r.orgType || 'NGO',
+      image: r.profileBanner || localStorage.getItem(`banner_${r._id}`) || 'https://images.pexels.com/photos/6995136/pexels-photo-6995136.jpeg',
+      logo: r.profilePic || logo1,
+      desc: r.bio || localStorage.getItem(`bio_${r._id}`) || `${r.name} is a verified organization on SpareShare AI, actively collecting and distributing donations across Pakistan.`,
+      city: r.city || localStorage.getItem(`city_${r._id}`) || 'Karachi',
+      tags: []
+    }))
+  ];
 
   const filteredOrgs = selectedCity === 'All'
-    ? organizations
-    : organizations.filter(org => org.city === selectedCity);
+    ? combinedOrgs
+    : combinedOrgs.filter(org => org.city.toLowerCase().includes(selectedCity.toLowerCase()) || selectedCity.toLowerCase().includes(org.city.toLowerCase()));
 
-  const ngos = filteredOrgs.filter(o => o.type === 'NGO');
-  const socialOrgs = filteredOrgs.filter(o => o.type === 'Social');
+  const ngos = filteredOrgs.filter(o => o.type === 'NGO' || o.type === 'Foundation');
+  const socialOrgs = filteredOrgs.filter(o => o.type === 'Social' || o.type === 'Instagram Page' || o.type === 'Community Group');
 
   return (
     <div className="home-wrapper">
@@ -147,21 +176,18 @@ const Home = () => {
           </div>
           <div className="hiw-grid">
             <div className="hiw-step">
-              <div className="hiw-number">01</div>
               <div className="hiw-icon-wrap"><UploadCloud size={32} color="#10b981" /></div>
               <h3>{t(lang, 'Post Your Donation', 'اپنا عطیہ پوسٹ کریں')}</h3>
               <p>{t(lang, 'Upload a photo, add details like category, quantity and expiry date. Our AI instantly validates food safety and medicine compliance.', 'تصویر اپ لوڈ کریں، زمرہ، مقدار اور میعاد کی تاریخ جیسی تفصیلات شامل کریں۔ ہمارا اے آئی فوری طور پر خوراک کی حفاظت کی تصدیق کرتا ہے۔')}</p>
               <div className="hiw-connector" />
             </div>
             <div className="hiw-step">
-              <div className="hiw-number">02</div>
               <div className="hiw-icon-wrap"><Search size={32} color="#10b981" /></div>
               <h3>{t(lang, 'Smart Matching', 'ذہین ملاپ')}</h3>
               <p>{t(lang, 'Receivers browse and request nearby donations filtered by category and distance. Food items are restricted to 5km for freshness.', 'وصول کنندگان قریبی عطیات براؤز کرتے اور درخواست دیتے ہیں۔ تازگی کے لیے خوراکی اشیاء 5 کلومیٹر تک محدود ہیں۔')}</p>
               <div className="hiw-connector" />
             </div>
             <div className="hiw-step">
-              <div className="hiw-number">03</div>
               <div className="hiw-icon-wrap"><Handshake size={32} color="#10b981" /></div>
               <h3>{t(lang, 'Safe Handoff', 'محفوظ حوالگی')}</h3>
               <p>{t(lang, 'Donor approves the request, receiver gets contact details for pickup. Trust scores are updated after every successful exchange.', 'عطیہ دہندہ درخواست منظور کرتا ہے، وصول کنندہ کو رابطہ تفصیلات ملتی ہیں۔ ہر کامیاب تبادلے کے بعد ٹرسٹ اسکور اپ ڈیٹ ہوتا ہے۔')}</p>
@@ -183,7 +209,7 @@ const Home = () => {
         <div className="container">
           <div className="section-header-clean" style={{ textAlign: 'center', marginBottom: '3rem' }}>
             <h2>{t(lang, 'Our Growing Impact', 'ہمارا بڑھتا ہوا اثر')}</h2>
-            <p>{t(lang, 'Every donation tracked, every life touched — in real time', 'ہر عطیہ ٹریک کیا گیا، ہر زندگی چھوئی گئی — حقیقی وقت میں')}</p>
+            <p>{t(lang, 'Every donation tracked, every life touched in real time', 'ہر عطیہ ٹریک کیا گیا، ہر زندگی چھوئی گئی — حقیقی وقت میں')}</p>
           </div>
           <div className="impact-grid">
             {[
@@ -208,7 +234,7 @@ const Home = () => {
         <div className="org-filter-header">
           <div className="section-header-clean" style={{ marginBottom: 0, textAlign: 'left' }}>
             <h2>{t(lang, 'Explore Verified Organizations', 'تصدیق شدہ تنظیمیں دیکھیں')}</h2>
-            <p>{t(lang, 'Find organizations making a difference near you', 'آپ کے قریب فرق ڈالنے والی تنظیمیں تلاش کریں')}</p>
+            <p>{t(lang, 'Find an organizations making a difference near you', 'آپ کے قریب فرق ڈالنے والی تنظیمیں تلاش کریں')}</p>
           </div>
           <div className="city-filter-box">
             <Filter size={16} color="#64748b" />

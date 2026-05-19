@@ -169,6 +169,61 @@ const ZakatCalculator = ({ onDonate }) => {
           </div>
 
         </div>
+
+        {/* Quranic Verses & Hadiths Section */}
+        <div className="charity-wisdom-section glass-panel" style={{ marginTop: '3rem', padding: '2.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)', textAlign: 'center', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            ✨ {t(lang, 'Virtues of Charity & Zakat', 'صدقہ اور زکوٰۃ کی فضیلت')}
+          </h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+            {/* Verse 1 */}
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <span style={{ fontSize: '1.5rem', alignSelf: 'center' }}>📖</span>
+              <p style={{ fontFamily: 'serif', direction: 'rtl', fontSize: '1.15rem', color: '#6ee7b7', margin: 0, textAlign: 'center', lineHeight: 1.8 }}>
+                "مَّثَلُ الَّذِينَ يُنفِقُونَ أَمْوَالَهُمْ فِي سَبِيلِ اللَّهِ كَمَثَلِ حَبَّةٍ أَنبَتَتْ سَبْعَ سَنَابِلَ فِي كُلِّ سُنبُلَةٍ مِّائَةُ حَبَّةٍ ۗ وَاللَّهُ يُضَاعِفُ لِمَن يَشَاءُ"
+              </p>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                {t(lang, 
+                  "The example of those who spend their wealth in the way of Allah is like a seed of grain which grows seven spikes; in each spike is a hundred grains. And Allah multiplies for whom He wills.",
+                  "جو لوگ اپنا مال اللہ کی راہ میں خرچ کرتے ہیں ان کی مثال اس دانے جیسی ہے جس سے سات بالیاں اگیں اور ہر بالی میں سو دانے ہوں، اور اللہ جس کے لیے چاہتا ہے اسے دوگنا کر دیتا ہے۔"
+                )}
+              </p>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textAlign: 'right' }}>[Al-Baqarah 2:261]</span>
+            </div>
+
+            {/* Verse 2 */}
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <span style={{ fontSize: '1.5rem', alignSelf: 'center' }}>📖</span>
+              <p style={{ fontFamily: 'serif', direction: 'rtl', fontSize: '1.15rem', color: '#6ee7b7', margin: 0, textAlign: 'center', lineHeight: 1.8 }}>
+                "الَّذِينَ يُنفِقُونَ أَمْوَالَهُم بِاللَّيْلِ وَالنَّهَارِ سِرًّا وَعَلَانِيَةً فَلَهُمْ أَجْرُهُمْ عِندَ رَبِّهِمْ"
+              </p>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                {t(lang, 
+                  "Those who spend their wealth [in Allah's way] by night and by day, secretly and publicly - they will have their reward with their Lord.",
+                  "جو لوگ اپنے مال شب و روز، پوشیدہ اور ظاہر خرچ کرتے ہیں، ان کا اجر ان کے رب کے پاس ہے۔"
+                )}
+              </p>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textAlign: 'right' }}>[Al-Baqarah 2:274]</span>
+            </div>
+
+            {/* Hadith */}
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '1.5rem', alignSelf: 'center' }}>✨</span>
+              <p style={{ fontFamily: 'serif', direction: 'rtl', fontSize: '1.25rem', color: '#6ee7b7', margin: 0, textAlign: 'center', lineHeight: 1.8 }}>
+                "مَا نَقَصَتْ صَدَقَةٌ مِنْ مَالٍ"
+              </p>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                {t(lang, 
+                  "Prophet Muhammad (ﷺ) said: 'Charity does not decrease wealth.'",
+                  "حضور پاک (صلی اللہ علیہ وآلہ وسلم) نے فرمایا: 'صدقہ دینے سے مال میں کمی نہیں ہوتی۔'"
+                )}
+              </p>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textAlign: 'right' }}>[Sahih Muslim 2588]</span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

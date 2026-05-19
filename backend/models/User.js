@@ -17,9 +17,10 @@ const UserSchema = new mongoose.Schema({
   ratingCount: { type: Number, default: 0 },
 
   // Profile
-  bio:        { type: String, default: '' },
-  city:       { type: String, default: '' },
-  profilePic: { type: String, default: '' },
+  bio:           { type: String, default: '' },
+  city:          { type: String, default: '' },
+  profilePic:    { type: String, default: '' },
+  profileBanner: { type: String, default: '' },
 
   // Notification preference (email-ready)
   emailNotifications: { type: Boolean, default: true },

@@ -1,124 +1,261 @@
-/* DonationWizard.css */
+/* ==========================================================================
+   SPARESHARE AI - PREMIUM WIZARD DIALOG SYSTEM (DonationWizard.css)
+   ========================================================================== */
 
 .wizard-container {
   min-height: 100vh;
-  background-color: var(--bg-secondary);
+  background-color: #030712;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4rem 1rem;
+  padding: 6rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/* Glowing Radial Orbs for depth */
+.wizard-container::before {
+  content: '';
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, transparent 75%);
+  top: -10%;
+  left: 20%;
+  pointer-events: none;
+  z-index: 0;
+  animation: float 14s ease-in-out infinite;
+}
+
+/* Glassmorphic SaaS Wizard Card */
 .wizard-card {
   width: 100%;
-  max-width: 600px;
-  background: white;
-  padding: 3rem;
-  border-radius: 24px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
-  border: none;
+  max-width: 620px;
+  background: rgba(17, 24, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 3.5rem 3rem;
+  border-radius: 28px;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 0 40px rgba(16, 185, 129, 0.06);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  position: relative;
+  z-index: 1;
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Back Link Upgrade */
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  color: var(--text-muted);
+  gap: 0.6rem;
+  color: #9ca3af;
   text-decoration: none;
-  font-weight: 500;
-  margin-bottom: 2rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 2.5rem;
+  transition: all 0.2s ease;
 }
 
 .back-link:hover {
-  color: var(--text-main);
+  color: #10b981;
+  transform: translateX(-3px);
 }
 
+/* Header Elements */
 .wizard-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .wizard-logo {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
   object-fit: cover;
-  margin-bottom: 1rem;
-  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(16, 185, 129, 0.3);
 }
 
 .wizard-header h2 {
-  font-size: 2rem;
-  color: var(--text-main);
-  margin-bottom: 0.5rem;
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.02em;
 }
 
 .wizard-header p {
-  color: var(--text-muted);
+  color: #9ca3af;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  max-width: 480px;
+  margin: 0 auto;
 }
 
+/* Drag & Drop Upload Zone */
 .upload-zone {
-  border: 2px dashed #cbd5e1;
-  border-radius: 16px;
-  padding: 3rem 2rem;
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 3.5rem 2rem;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
-  background: #f8fafc;
-  margin-bottom: 2rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.01);
+  margin-bottom: 2.25rem;
+  position: relative;
+  overflow: hidden;
 }
 
 .upload-zone:hover, .upload-zone.active {
-  border-color: var(--primary);
-  background: #f5f3ff;
+  border-color: #34d399;
+  background: rgba(16, 185, 129, 0.04);
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.06);
 }
 
 .upload-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  color: var(--text-muted);
+  gap: 0.75rem;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.upload-zone:hover .upload-placeholder {
+  color: #34d399;
+}
+
+.upload-placeholder h3 {
+  font-family: 'Outfit', sans-serif;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.upload-placeholder p {
+  font-size: 0.88rem;
+  color: #9ca3af;
 }
 
 .upload-preview {
   max-width: 100%;
-  max-height: 300px;
-  border-radius: 8px;
-  object-fit: contain;
+  max-height: 240px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
+/* Floating AI Scanning Scanner Line Effect */
+.upload-zone::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #34d399, transparent);
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: transform 0.1s;
+}
+
+.upload-zone.active::after {
+  opacity: 1;
+  animation: scanning-bar 2.2s linear infinite;
+}
+
+/* Submit Action Button */
 .wizard-submit {
   width: 100%;
-  padding: 1.25rem;
-  font-size: 1.1rem;
-  border-radius: 12px;
+  padding: 1.1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.success-state {
-  text-align: center;
-  padding: 2rem 0;
+.wizard-submit:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 16px 30px rgba(16, 185, 129, 0.4), 0 0 0 2px rgba(52, 211, 153, 0.4) inset;
 }
 
-.success-icon {
-  margin-bottom: 1.5rem;
-  color: #10b981;
+.wizard-submit:active:not(:disabled) {
+  transform: translateY(-1px) scale(0.99);
 }
 
+/* Success Card details */
 .tracking-info {
-  background: #f1f5f9;
-  padding: 1rem;
-  border-radius: 8px;
-  margin: 1.5rem 0 2rem;
-  font-family: monospace;
-  font-size: 1.1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #34d399;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  margin: 1.5rem 0;
+  font-family: 'Outfit', monospace;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
+/* Animation utilities */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-.spin {
-  animation: spin 1s linear infinite;
+@keyframes scanning-bar {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(240px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ════════════════════════════════
+   COMPREHENSIVE RESPONSIVENESS OVERRIDES
+   ════════════════════════════════ */
+@media (max-width: 640px) {
+  .wizard-container {
+    padding: 3rem 1rem;
+  }
+  .wizard-card {
+    padding: 2.25rem 1.5rem;
+    border-radius: 24px;
+  }
+  .wizard-header h2 {
+    font-size: 1.65rem;
+  }
+  .upload-zone {
+    padding: 2.5rem 1rem;
+  }
+  .wizard-submit {
+    padding: 1rem;
+    font-size: 0.98rem;
+  }
 }

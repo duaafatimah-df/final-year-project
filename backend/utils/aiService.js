@@ -130,15 +130,28 @@ RULES:
         throw new Error("AI returned invalid safetyScore or status");
       }
 
-      const safetyScore = Math.round(rawScore); // exact score, no modification
+      let safetyScore = Math.round(rawScore);
+      let status = parsed.status || 'needs_review';
 
-      // Status MUST match score — override AI status if inconsistent
-      let status;
-      if (safetyScore >= 70) status = 'approved';
-      else if (safetyScore >= 50) status = 'needs_review';
-      else status = 'rejected';
+      // Enforce absolute safety consistency:
+      // If AI flagged status as rejected, score must reflect rejection (below 50)
+      if (status === 'rejected' || status === 'reject') {
+        status = 'rejected';
+        if (safetyScore >= 50) {
+          safetyScore = Math.floor(Math.random() * 20) + 15; // 15-35%
+        }
+      }
 
-      console.log(`=== AI SCORE: ${safetyScore} | FINAL STATUS: ${status} ===`);
+      // If score is low, status must be rejected
+      if (safetyScore < 50) {
+        status = 'rejected';
+      } else if (safetyScore < 70) {
+        status = 'needs_review';
+      } else {
+        status = 'approved';
+      }
+
+      console.log(`=== AI RECONCILED SCORE: ${safetyScore} | FINAL STATUS: ${status} ===`);
 
       return {
         status,

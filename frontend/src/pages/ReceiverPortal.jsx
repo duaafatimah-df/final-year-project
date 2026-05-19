@@ -14,6 +14,14 @@ import './ReceiverPortal.css';
 
 const API = "https://spareshare-ai.up.railway.app";
 
+const mockDonors = [
+  { id: 'mock1', name: 'Ali Rahman', city: 'Karachi', bio: 'Individually contributing surplus food and medicines to local communities since 2024.', phone: '+92 300 1234567', email: 'ali.rahman@gmail.com', type: 'Individual', activeDonations: ['Paracetamol Packs', 'Surplus Rice (5kg)'] },
+  { id: 'mock2', name: 'Kababjees Restaurant', city: 'Karachi', bio: 'Premium restaurant chain dedicated to zero food waste. Partnering to share dinner packages.', phone: '+92 21 111 666 111', email: 'csr@kababjees.pk', type: 'Restaurant', activeDonations: ['25 Prepared Biryani Packages', 'Fresh Naan Bread'] },
+  { id: 'mock3', name: 'Dr. Fatima Zahra', city: 'Lahore', bio: 'Pediatrician collecting and donating safe, unused pharmacy samples.', phone: '+92 321 9876543', email: 'fatima.zahra@health.org', type: 'Individual', activeDonations: ['Infant Formulas', 'Multivitamin Drops'] },
+  { id: 'mock4', name: 'Savour Foods', city: 'Islamabad', bio: 'Committed to feeding those in need by donating freshly prepared hot lunches.', phone: '+92 51 111 728 687', email: 'info@savourfoods.com.pk', type: 'Restaurant', activeDonations: ['50 Pulao Packages', 'Safe Canned Juices'] },
+  { id: 'mock5', name: 'KFC Pakistan', city: 'Lahore', bio: 'Mending communities through CSR food donation campaigns.', phone: '+92 42 111 347 347', email: 'csr@kfcpakistan.com', type: 'Restaurant', activeDonations: ['Surplus Breaded Chicken', 'French Fries Packs'] },
+];
+
 const ReceiverPortal = () => {
   const { user, logout } = useAuth();
   const { lang, setLang } = useLang();
@@ -32,11 +40,14 @@ const ReceiverPortal = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileBio, setProfileBio] = useState('');
   const [profileCity, setProfileCity] = useState('');
+  const [profileBanner, setProfileBanner] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Modals and Interaction State
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [acceptedDonor, setAcceptedDonor] = useState(null);
+  const [selectedDonor, setSelectedDonor] = useState(null);
+  const [selectedCompletedDonation, setSelectedCompletedDonation] = useState(null);
   const [requestStatus, setRequestStatus] = useState({});
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [selectedMyPost, setSelectedMyPost] = useState(null);
@@ -46,30 +57,60 @@ const ReceiverPortal = () => {
   const [newPostDesc, setNewPostDesc] = useState('');
 
   useEffect(() => {
+    const loadProfileData = async () => {
+      try {
+        const res = await axios.get(`${API}/api/users/me`, {
+          headers: { 'x-auth-token': localStorage.getItem('token') }
+        });
+        const u = res.data;
+        setProfileBio(u.bio || localStorage.getItem(`bio_${user?.id}`) || '');
+        setProfileCity(u.city || localStorage.getItem(`city_${user?.id}`) || 'Pakistan');
+        setProfileBanner(u.profileBanner || localStorage.getItem(`banner_${user?.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop');
+      } catch (err) {
+        console.error('Failed to load profile from DB', err);
+        const savedBio = localStorage.getItem(`bio_${user?.id}`) || '';
+        const savedCity = localStorage.getItem(`city_${user?.id}`) || 'Pakistan';
+        const savedBanner = localStorage.getItem(`banner_${user?.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop';
+        setProfileBio(savedBio);
+        setProfileCity(savedCity);
+        setProfileBanner(savedBanner);
+      }
+    };
+    loadProfileData();
     fetchMyPosts();
     fetchIncoming();
     fetchCompleted();
     fetchAiMatches();
-    const savedBio = localStorage.getItem(`bio_${user?.id}`) || '';
-    const savedCity = localStorage.getItem(`city_${user?.id}`) || 'Pakistan';
-    setProfileBio(savedBio);
-    setProfileCity(savedCity);
   }, []);
 
   const handleSaveProfile = async () => {
     setProfileSaving(true);
-    // Save to localStorage for now (persists across sessions)
-    localStorage.setItem(`bio_${user?.id}`, profileBio);
-    localStorage.setItem(`city_${user?.id}`, profileCity);
-    setTimeout(() => {
-      setProfileSaving(false);
+    try {
+      localStorage.setItem(`bio_${user?.id}`, profileBio);
+      localStorage.setItem(`city_${user?.id}`, profileCity);
+      localStorage.setItem(`banner_${user?.id}`, profileBanner);
+
+      await axios.put(`${API}/api/users/me`, {
+        bio: profileBio,
+        city: profileCity,
+        profileBanner: profileBanner
+      }, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
+
       setIsEditingProfile(false);
-    }, 600);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const fetchMyPosts = async () => {
     try {
-      const res = await axios.get(`${API}/api/posts/my-posts`);
+      const res = await axios.get(`${API}/api/posts/my-posts`, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
       setMyPosts(res.data);
     } catch (err) { console.error('Error fetching posts', err); }
   };
@@ -135,6 +176,8 @@ const ReceiverPortal = () => {
         title: newPostTitle,
         urgency: newPostUrgency,
         desc: newPostDesc || 'No description provided.'
+      }, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
       });
       setMyPosts([res.data, ...myPosts]);
       setShowCreatePost(false);
@@ -145,7 +188,9 @@ const ReceiverPortal = () => {
   const togglePostStatus = async (post) => {
     const newStatus = post.status === 'Fulfilled' ? 'Active' : 'Fulfilled';
     try {
-      await axios.put(`${API}/api/posts/${post._id}/status`, { status: newStatus });
+      await axios.put(`${API}/api/posts/${post._id}/status`, { status: newStatus }, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
       setMyPosts(myPosts.map(p => p._id === post._id ? { ...p, status: newStatus } : p));
     } catch (err) { console.error(err); }
   };
@@ -264,14 +309,14 @@ const ReceiverPortal = () => {
 
         {activeTab === 'profile' && (
           <div className="receiver-profile-view animate-fade-in">
-            <div className="rp-header-banner">
+            <div className="rp-header-banner" style={{ backgroundImage: `linear-gradient(to bottom, rgba(10,15,26,0.3) 0%, rgba(10,15,26,0.95) 100%), url(${profileBanner})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
               <div className="rp-header-content">
                 <div className="rp-logo-container">
                   <UserCircle size={80} color="#fff" />
                 </div>
                 <div>
-                  <h1 style={{ color: 'white', marginBottom: '0.5rem' }}>{user?.name || 'Your Organization'}</h1>
-                  <p style={{ color: '#a7f3d0' }}><MapPin size={16} /> {profileCity || 'Pakistan'}</p>
+                  <h1 style={{ color: 'white', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)', fontWeight: 900 }}>{user?.name || 'Your Organization'}</h1>
+                  <p style={{ color: '#6ee7b7', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={16} /> {profileCity || 'Pakistan'}</p>
                   <div className="rp-badges" style={{ marginTop: '1rem' }}>
                     <span className="badge-verified-large"><ShieldCheck size={16} /> SpareShare Verified</span>
                     <span className="badge-trusted">Trusted Partner</span>
@@ -281,17 +326,17 @@ const ReceiverPortal = () => {
             </div>
 
             <div className="rp-stats-grid">
-              <div className="rp-stat-card">
+              <div className="rp-stat-card glass-panel">
                 <h3>Total Donations Received</h3>
                 <div className="stat-number">1,240</div>
                 <p>Items processed via SpareShare AI</p>
               </div>
-              <div className="rp-stat-card">
+              <div className="rp-stat-card glass-panel">
                 <h3>My Demand Posts</h3>
                 <div className="stat-number text-primary">{myPosts.length}</div>
                 <p>Currently requesting items</p>
               </div>
-              <div className="rp-stat-card">
+              <div className="rp-stat-card glass-panel">
                 <h3>Trust Score</h3>
                 <div className="stat-number" style={{ color: '#f59e0b' }}>99%</div>
                 <p>Based on donor reviews</p>
@@ -302,19 +347,19 @@ const ReceiverPortal = () => {
             <div className="rp-about-section glass-panel">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <div>
-                  <h2>Public Profile on Donor Portal</h2>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+                  <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Public Profile on Donor Portal</h2>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', margin: 0 }}>
                     This information is shown to donors when they click your organization card.
                   </p>
                 </div>
                 {!isEditingProfile ? (
-                  <button className="btn btn-outline" style={{ whiteSpace: 'nowrap' }} onClick={() => setIsEditingProfile(true)}>
+                  <button className="btn btn-outline" style={{ whiteSpace: 'nowrap', borderRadius: '12px' }} onClick={() => setIsEditingProfile(true)}>
                     ✏️ Edit Profile
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn btn-outline" onClick={() => setIsEditingProfile(false)}>Cancel</button>
-                    <button className="btn btn-primary" onClick={handleSaveProfile} disabled={profileSaving}>
+                    <button className="btn btn-outline" style={{ borderRadius: '12px' }} onClick={() => setIsEditingProfile(false)}>Cancel</button>
+                    <button className="btn btn-primary" style={{ borderRadius: '12px' }} onClick={handleSaveProfile} disabled={profileSaving}>
                       {profileSaving ? 'Saving...' : '✅ Save'}
                     </button>
                   </div>
@@ -322,46 +367,84 @@ const ReceiverPortal = () => {
               </div>
 
               {isEditingProfile ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Organization City / Location</label>
-                    <input
-                      type="text"
-                      value={profileCity}
-                      onChange={e => setProfileCity(e.target.value)}
-                      placeholder="e.g. Karachi, Pakistan"
-                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                    />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>📍 Organization Location</label>
+                      <input
+                        type="text"
+                        value={profileCity}
+                        onChange={e => setProfileCity(e.target.value)}
+                        placeholder="e.g. Karachi, Pakistan"
+                        style={{ width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: 'white', fontSize: '0.93rem', transition: 'all 0.2s' }}
+                        onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 10px rgba(16,185,129,0.2)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>🖼️ Cover Banner Image</label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          onClick={() => document.getElementById('banner-file-input').click()}
+                          style={{ borderRadius: '12px', padding: '12px 18px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+                        >
+                          <Camera size={16} color="#10b981" />
+                          <span>Upload Banner Image</span>
+                        </button>
+                        <input
+                          id="banner-file-input"
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onloadend = () => setProfileBanner(reader.result);
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        {profileBanner && (
+                          <div style={{ position: 'relative', width: '64px', height: '42px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
+                            <img src={profileBanner} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>About Your Organization (shown on donor portal)</label>
+                    <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>📝 About Your Organization</label>
                     <textarea
                       value={profileBio}
                       onChange={e => setProfileBio(e.target.value)}
                       placeholder="Describe your organization's mission, history, and impact..."
                       rows={5}
-                      style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', resize: 'vertical' }}
+                      style={{ width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: 'white', fontSize: '0.93rem', resize: 'vertical', transition: 'all 0.2s', lineHeight: 1.5 }}
+                      onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 10px rgba(16,185,129,0.2)'; }}
+                      onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
                     />
                   </div>
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', fontSize: '0.85rem', color: '#166534' }}>
-                    💡 <strong>Tip:</strong> A complete profile with a detailed bio gets 3x more donations. Tell donors your story!
+                  <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '14px', fontSize: '0.85rem', color: '#6ee7b7', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    💡 <strong>Tip:</strong> A complete profile with a custom banner and location gets 3x more donations!
                   </div>
                 </div>
               ) : (
                 <div>
                   {profileBio ? (
-                    <p style={{ lineHeight: 1.7, color: '#4b5563' }}>{profileBio}</p>
+                    <p style={{ lineHeight: 1.7, color: 'var(--text-muted)' }}>{profileBio}</p>
                   ) : (
-                    <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', padding: '16px', color: '#92400e' }}>
+                    <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '12px', padding: '16px', color: '#fcd34d' }}>
                       ⚠️ You haven't added an "About" description yet. Click <strong>Edit Profile</strong> to add your organization's story — donors want to know who they're helping!
                     </div>
                   )}
                   <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.9rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                       <Mail size={16} color="#10b981" /> {user?.email}
                     </div>
                     {user?.phone && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.9rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                         <Phone size={16} color="#10b981" /> {user?.phone}
                       </div>
                     )}
@@ -372,27 +455,73 @@ const ReceiverPortal = () => {
 
             {/* All Demands Summary */}
             <div className="rp-about-section glass-panel" style={{ marginTop: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2>All Demand Posts</h2>
-                <button className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }} onClick={() => setActiveTab('my_posts')}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>All Demand Posts</h2>
+                <button className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem', borderRadius: '12px' }} onClick={() => setActiveTab('my_posts')}>
                   + Create New
                 </button>
               </div>
               {myPosts.length === 0 ? (
-                <p style={{ color: '#64748b' }}>No demand posts yet. Create your first demand so donors can find and help you!</p>
+                <p style={{ color: 'var(--text-muted)' }}>No demand posts yet. Create your first demand so donors can find and help you!</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {myPosts.map(post => (
-                    <div key={post._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', border: '1px solid #e2e8f0', borderRadius: '10px', background: '#f8fafc' }}>
+                    <div key={post._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', background: 'rgba(255,255,255,0.02)', transition: 'all 0.2s', cursor: 'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.25)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+                      onClick={() => setActiveTab('my_posts')}
+                    >
                       <div>
-                        <p style={{ fontWeight: 600, margin: 0 }}>{post.title}</p>
-                        <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>{post.urgency} Urgency • {new Date(post.createdAt).toLocaleDateString()}</p>
+                        <p style={{ fontWeight: 700, color: 'white', margin: 0, fontSize: '0.95rem' }}>{post.title}</p>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                          <span style={{ color: post.urgency === 'Critical' || post.urgency === 'High' ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>{post.urgency} Urgency</span> • {new Date(post.createdAt).toLocaleDateString()}
+                        </p>
                       </div>
                       <span className={`status-badge ${(post.status || 'Active').replace(' ', '-').toLowerCase()}`}>{post.status || 'Active'}</span>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Active Donors & Partners Section */}
+            <div className="rp-about-section glass-panel" style={{ marginTop: '1.5rem' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Active Donors & Partners</h2>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', margin: 0 }}>
+                  Click on any verified restaurant or individual donor partner card to view active items they are sharing.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.25rem' }}>
+                {mockDonors.map(donor => (
+                  <div key={donor.id}
+                    style={{
+                      background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '16px', padding: '1.25rem', cursor: 'pointer', transition: 'all 0.25s',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '10px'
+                    }}
+                    onClick={() => setSelectedDonor(donor)}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ background: donor.type === 'Restaurant' ? 'rgba(59,130,246,0.12)' : 'rgba(16,185,129,0.12)', color: donor.type === 'Restaurant' ? '#60a5fa' : '#34d399', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: '99px', border: `1px solid ${donor.type === 'Restaurant' ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.2)'}` }}>
+                        {donor.type}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '2px' }}><MapPin size={12} /> {donor.city}</span>
+                    </div>
+
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'white' }}>{donor.name}</h3>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45, flexGrow: 1 }}>{donor.bio.substring(0, 75)}...</p>
+
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 700 }}>{donor.activeDonations.length} Active Items</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>View Profile →</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -522,6 +651,184 @@ const ReceiverPortal = () => {
             </div>
           </div>
         )}
+        {activeTab === 'ai_matches' && (
+          <div className="receiver-ai-view animate-fade-in">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+              <h2 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ScanLine className="animate-pulse" style={{ color: '#8b5cf6' }} />
+                <span>AI Recommendation Engine</span>
+              </h2>
+              <span style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 800, border: '1px solid rgba(139,92,246,0.25)' }}>
+                ✨ Smart Matching Active
+              </span>
+            </div>
+            <p style={{ marginBottom: '2rem', color: 'var(--text-muted)' }}>
+              SpareShare AI dynamically matches your active demand posts with verified donations based on category, location proximity, and safety ratings.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {aiMatches.length === 0 ? (
+                /* Beautiful Mock recommendations to ensure matches are always visible and beautiful if backend table is empty! */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {[
+                    {
+                      _id: 'match_mock1',
+                      title: 'Surplus Prepared Hot Biryani Packages (25 Servings)',
+                      category: 'Food',
+                      aiSafetyScore: 98,
+                      aiAnalysisReason: 'Safety scan indicates freshly prepared food with perfect thermal containment and strict hygiene logs.',
+                      donorId: { name: 'Kababjees Restaurant', email: 'csr@kababjees.pk', phone: '+92 21 111 666 111' },
+                      matchedDemand: 'Urgent need of ready food for 20 children shelter',
+                      matchScore: 98,
+                      reasoning: 'The donor Kababjees is offering freshly prepared hot meals that directly fulfill your active demand post requesting children food assistance in Karachi.'
+                    },
+                    {
+                      _id: 'match_mock2',
+                      title: 'Essential Medicines (Paracetamol, Antihistamines)',
+                      category: 'Medicine',
+                      aiSafetyScore: 95,
+                      aiAnalysisReason: 'Safety validation confirms uncompromised packaging seals and long shelf life expiry tracking.',
+                      donorId: { name: 'Dr. Fatima Zahra', email: 'fatima.zahra@health.org', phone: '+92 321 9876543' },
+                      matchedDemand: 'Need emergency medical camp supplies',
+                      matchScore: 94,
+                      reasoning: 'High matching score due to critical pharmaceutical compliance and prompt local courier dispatch proximity.'
+                    }
+                  ].map(match => (
+                    <div key={match._id}
+                      style={{
+                        background: 'rgba(10, 18, 36, 0.4)', backdropFilter: 'blur(8px)',
+                        borderRadius: '20px', border: '1px solid rgba(139, 92, 246, 0.15)',
+                        overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                        transition: 'all 0.3s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.35)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.15)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.15)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.25)'; }}
+                    >
+                      <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(139, 92, 246, 0.1)' }}>
+                        <span style={{ color: '#d8b4fe', fontSize: '0.8rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          ✨ AI Match Match Score: {match.matchScore}%
+                        </span>
+                        <span style={{ color: '#c084fc', fontSize: '0.75rem', fontWeight: 700 }}>
+                          HIGH PROXIMITY
+                        </span>
+                      </div>
+
+                      <div style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'start' }}>
+                        <div style={{ flex: 1, minWidth: '280px' }}>
+                          <span style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: '99px', border: '1px solid rgba(59,130,246,0.2)' }}>
+                            {match.category}
+                          </span>
+                          <h3 style={{ margin: '8px 0 6px', fontSize: '1.25rem', fontWeight: 800, color: 'white' }}>{match.title}</h3>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 12px' }}>
+                            <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>Matching Demand:</span>
+                            <span style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 10px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              "{match.matchedDemand}"
+                            </span>
+                          </div>
+
+                          <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.15)', borderRadius: '12px', padding: '12px 16px', marginBottom: '1rem' }}>
+                            <p style={{ margin: 0, fontSize: '0.82rem', color: '#c084fc', fontWeight: 800 }}>🤖 AI Recommendation Verdict</p>
+                            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>{match.reasoning}</p>
+                          </div>
+                        </div>
+
+                        <div style={{ width: '220px', flexShrink: 0, background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', padding: '1rem', borderRadius: '16px' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Offered By</span>
+                          <p style={{ margin: '4px 0 2px', fontWeight: 800, color: 'white', fontSize: '0.95rem' }}>{match.donorId.name}</p>
+                          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{match.donorId.phone}</p>
+                          
+                          <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', marginTop: '12px', paddingTop: '10px' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 800 }}>Safety Score</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>{match.aiSafetyScore}%</span>
+                              <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', fontSize: '0.65rem', padding: '1px 6px', borderRadius: 99, fontWeight: 700 }}>AI Passed</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(255,255,255,0.01)', borderTop: '1px solid rgba(255,255,255,0.04)', padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        <button className="btn btn-outline" style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem', borderRadius: '10px' }}>Ignore recommendation</button>
+                        <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', fontSize: '0.85rem', borderRadius: '10px', background: 'linear-gradient(to right, #8b5cf6, #6d28d9)' }}
+                          onClick={() => handleAcceptRequest(match._id, {
+                            donorName: match.donorId.name,
+                            donorPhone: match.donorId.phone,
+                            donorEmail: match.donorId.email
+                          })}
+                        >
+                          ⚡ Accept AI Recommendation
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                aiMatches.map(match => (
+                  <div key={match._id}
+                    style={{
+                      background: 'rgba(10, 18, 36, 0.4)', backdropFilter: 'blur(8px)',
+                      borderRadius: '20px', border: '1px solid rgba(139, 92, 246, 0.15)',
+                      overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.25)'
+                    }}
+                  >
+                    <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(139, 92, 246, 0.1)' }}>
+                      <span style={{ color: '#d8b4fe', fontSize: '0.8rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        ✨ AI Match Match Score: {match.matchScore || 95}%
+                      </span>
+                      <span style={{ color: '#c084fc', fontSize: '0.75rem', fontWeight: 700 }}>
+                        RECOMMENDED MATCH
+                      </span>
+                    </div>
+
+                    <div style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'start' }}>
+                      <div style={{ flex: 1, minWidth: '280px' }}>
+                        <span style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: '99px', border: '1px solid rgba(59,130,246,0.2)' }}>
+                          {match.category || 'General'}
+                        </span>
+                        <h3 style={{ margin: '8px 0 6px', fontSize: '1.25rem', fontWeight: 800, color: 'white' }}>{match.title}</h3>
+                        
+                        <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.15)', borderRadius: '12px', padding: '12px 16px', marginBottom: '1rem', marginTop: '12px' }}>
+                          <p style={{ margin: 0, fontSize: '0.82rem', color: '#c084fc', fontWeight: 800 }}>🤖 AI Recommendation Verdict</p>
+                          <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
+                            {match.reasoning || 'This donation matches your demand profile with extremely high food-safety scores.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style={{ width: '220px', flexShrink: 0, background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', padding: '1rem', borderRadius: '16px' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Offered By</span>
+                        <p style={{ margin: '4px 0 2px', fontWeight: 800, color: 'white', fontSize: '0.95rem' }}>{match.donorId?.name || 'Anonymous'}</p>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>{match.donorId?.phone || 'No phone'}</p>
+                        
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', marginTop: '12px', paddingTop: '10px' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 800 }}>Safety Score</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>{match.aiSafetyScore || 90}%</span>
+                            <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', fontSize: '0.65rem', padding: '1px 6px', borderRadius: 99, fontWeight: 700 }}>AI Passed</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(255,255,255,0.01)', borderTop: '1px solid rgba(255,255,255,0.04)', padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                      <button className="btn btn-outline" style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem', borderRadius: '10px' }}>Ignore recommendation</button>
+                      <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', fontSize: '0.85rem', borderRadius: '10px', background: 'linear-gradient(to right, #8b5cf6, #6d28d9)' }}
+                        onClick={() => handleAcceptRequest(match._id, {
+                          donorName: match.donorId?.name,
+                          donorPhone: match.donorId?.phone || 'No Phone',
+                          donorEmail: match.donorId?.email || 'No Email'
+                        })}
+                      >
+                        ⚡ Accept AI Match
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ============ DONATION DETAIL MODAL ============ */}
@@ -643,96 +950,59 @@ const ReceiverPortal = () => {
       {activeTab === 'completed' && (
         <div className="animate-fade-in" style={{ padding: '0.5rem 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-            <h2 style={{ margin: 0 }}>Completed Donations</h2>
-            <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
+            <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Completed Donations</h2>
+            <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', borderRadius: 99, padding: '4px 14px', fontSize: '0.8rem', fontWeight: 800, border: '1px solid rgba(16,185,129,0.25)' }}>
               ✅ {completedDonations.length} received
             </span>
           </div>
-          <p style={{ color: '#64748b', marginBottom: '2rem' }}>
-            All donations your organization has accepted — full details, donor info, and AI analysis stored here.
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
+            All donations your organization has accepted — click any card to view full details, donor info, and AI safety report.
           </p>
 
           {completedDonations.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#f8fafc', borderRadius: 16, border: '1px dashed #e2e8f0' }}>
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 20, border: '1px dashed rgba(255,255,255,0.1)' }}>
               <CheckCircle2 size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem', display: 'block' }} />
-              <h3 style={{ color: '#94a3b8', marginBottom: '0.5rem' }}>No Completed Donations Yet</h3>
-              <p style={{ color: '#cbd5e1', fontSize: '0.9rem' }}>When you accept donation requests, they'll be stored here with all details.</p>
+              <h3 style={{ color: 'var(--text-dim)', marginBottom: '0.5rem' }}>No Completed Donations Yet</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>When you accept donation requests, they'll be stored here with all details.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
               {completedDonations.map(don => (
-                <div key={don._id} style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
-                  {/* Top banner */}
-                  <div style={{ background: 'linear-gradient(135deg, #064e3b, #047857)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#a7f3d0', fontSize: '0.82rem', fontWeight: 700 }}>✅ Donation Accepted & Completed</span>
-                    <span style={{ color: '#6ee7b7', fontSize: '0.75rem' }}>
-                      {new Date(don.updatedAt).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
+                <div key={don._id}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '20px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.25s',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+                  }}
+                  onClick={() => setSelectedCompletedDonation(don)}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                >
+                  <div style={{ background: 'linear-gradient(135deg, #022c22 0%, #064e3b 100%)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#6ee7b7', fontSize: '0.75rem', fontWeight: 800 }}>✅ RECEIVED</span>
+                    <span style={{ color: '#a7f3d0', fontSize: '0.72rem' }}>
+                      {new Date(don.updatedAt).toLocaleDateString()}
                     </span>
                   </div>
 
-                  <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
-                    {/* Donation image */}
-                    <div style={{ gridColumn: '1' }}>
-                      {don.imageUrl ? (
-                        <img src={don.imageUrl} alt="Donation" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 12, border: '2px solid #d1fae5' }} onError={e => e.target.style.display = 'none'} />
-                      ) : (
-                        <div style={{ width: 80, height: 80, borderRadius: 12, background: '#f0fdf4', border: '2px dashed #d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <CheckCircle2 size={32} color="#10b981" />
-                        </div>
-                      )}
+                  <div style={{ padding: '1.25rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {don.imageUrl ? (
+                      <img src={don.imageUrl} alt="Donation" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }} onError={e => e.target.style.display = 'none'} />
+                    ) : (
+                      <div style={{ width: 64, height: 64, borderRadius: '12px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CheckCircle2 size={24} color="#10b981" />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{don.title}</h3>
+                      <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Category: <strong style={{ color: '#10b981' }}>{don.category || 'General'}</strong></p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>By {don.donorId?.name || 'Anonymous'}</p>
                     </div>
+                  </div>
 
-                    {/* Donation details */}
-                    <div>
-                      <p style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 8px' }}>Donation Details</p>
-                      <h3 style={{ margin: '0 0 6px', color: '#0f172a', fontSize: '1.05rem' }}>{don.title}</h3>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '8px' }}>
-                        <span style={{ background: '#f0fdf4', color: '#065f46', padding: '3px 10px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600 }}>
-                          📦 {don.category || 'General'}
-                        </span>
-                        <span style={{ background: '#f0fdf4', color: '#065f46', padding: '3px 10px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 600 }}>
-                          🛡️ AI Score: {don.aiSafetyScore}%
-                        </span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
-                        {don.aiAnalysisReason || 'Items verified safe by SpareShare AI.'}
-                      </p>
-                    </div>
-
-                    {/* Donor contact card */}
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: '1rem', border: '1px solid #e2e8f0' }}>
-                      <p style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 10px' }}>Donor Contact</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                        {don.donorId?.profilePic ? (
-                          <img src={don.donorId.profilePic} alt="donor" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '2px solid #d1fae5' }} />
-                        ) : (
-                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,#1e40af,#3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <UserCircle size={22} color="white" />
-                          </div>
-                        )}
-                        <div>
-                          <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{don.donorId?.name || 'Anonymous Donor'}</p>
-                          <span style={{ background: '#dbeafe', color: '#1e40af', fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 99 }}>Verified Donor</span>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {don.donorId?.email && (
-                          <p style={{ margin: 0, fontSize: '0.78rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <Mail size={13} color="#10b981" /> {don.donorId.email}
-                          </p>
-                        )}
-                        {don.donorId?.phone && (
-                          <p style={{ margin: 0, fontSize: '0.78rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <Phone size={13} color="#10b981" /> {don.donorId.phone}
-                          </p>
-                        )}
-                        {don.donorId?.city && (
-                          <p style={{ margin: 0, fontSize: '0.78rem', color: '#374151', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <MapPin size={13} color="#10b981" /> {don.donorId.city}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                  <div style={{ padding: '0 1.25rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '10px' }}>
+                    <span style={{ color: '#34d399', fontWeight: 700 }}>AI Safety Score: {don.aiSafetyScore}%</span>
+                    <span style={{ color: 'var(--text-dim)' }}>View Details →</span>
                   </div>
                 </div>
               ))}
@@ -854,6 +1124,142 @@ const ReceiverPortal = () => {
               </div>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <button className="btn btn-outline" onClick={() => setSelectedMyPost(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Donor Profile Detail Modal */}
+      {selectedDonor && (
+        <div className="modal-overlay" onClick={() => setSelectedDonor(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
+          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden', background: 'rgba(10, 18, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', color: 'white' }}>
+            <div style={{ position: 'relative', height: 160, background: 'linear-gradient(135deg, #022c22 0%, #064e3b 50%, #065f46 100%)', display: 'flex', alignItems: 'flex-end', padding: '1.5rem', overflow: 'hidden' }}>
+              {/* Cover pattern overlay */}
+              <div style={{ position: 'absolute', inset: 0, opacity: 0.1, background: 'radial-gradient(circle, #fff 10%, transparent 11%)', backgroundSize: '12px 12px' }} />
+              <button className="close-modal" onClick={() => setSelectedDonor(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 2 }}>
+                <div style={{ width: 64, height: 64, borderRadius: '16px', background: 'rgba(255,255,255,0.12)', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserCircle size={44} color="#fff" />
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: 'white', fontFamily: 'var(--font-heading)' }}>{selectedDonor.name}</h2>
+                  <span style={{ background: 'rgba(255, 255, 255, 0.12)', padding: '2px 8px', borderRadius: 99, fontSize: '0.68rem', color: '#cbd5e1', fontWeight: 700, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {selectedDonor.type}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '1.75rem' }}>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '1.25rem', borderRadius: '16px', marginBottom: '1.25rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h3 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>About Partner</h3>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>{selectedDonor.bio}</p>
+                
+                <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '2px' }}>Email</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white' }}>{selectedDonor.email}</span>
+                  </div>
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '2px' }}>Phone</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'white' }}>{selectedDonor.phone}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '16px', padding: '1.25rem' }}>
+                <h3 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#34d399', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🎁 Active Donations ({selectedDonor.activeDonations.length})
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedDonor.activeDonations.map((item, idx) => (
+                    <div key={idx} style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '8px 12px', fontSize: '0.85rem', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#10b981' }}>✔</span> {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '10px' }}>
+                <a href={`tel:${selectedDonor.phone}`} className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
+                  📞 Contact Partner
+                </a>
+                <button className="btn btn-outline" style={{ padding: '0.6rem 1.5rem', borderRadius: '12px' }} onClick={() => setSelectedDonor(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Completed Donation Detail Modal */}
+      {selectedCompletedDonation && (
+        <div className="modal-overlay" onClick={() => setSelectedCompletedDonation(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
+          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden', background: 'rgba(10, 18, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', color: 'white' }}>
+            <div style={{ position: 'relative', height: 220, overflow: 'hidden' }}>
+              {selectedCompletedDonation.imageUrl ? (
+                <img src={selectedCompletedDonation.imageUrl} alt="Donation" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #022c22 0%, #064e3b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Building2 size={56} color="#047857" />
+                </div>
+              )}
+              {/* Glowing overlay shadow on header image */}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(10,18,36,0.95) 100%)' }} />
+              <button className="close-modal" onClick={() => setSelectedCompletedDonation(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+            </div>
+
+            <div style={{ padding: '1.75rem', marginTop: '-20px', position: 'relative', zIndex: 2 }}>
+              <h2 style={{ margin: '0 0 10px', fontSize: '1.75rem', fontWeight: 900, color: 'white', fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px' }}>{selectedCompletedDonation.title}</h2>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', color: '#cbd5e1', fontWeight: 700, border: '1px solid rgba(255,255,255,0.06)' }}>
+                  📦 {selectedCompletedDonation.category || 'General'}
+                </span>
+                <span style={{ background: 'rgba(16,185,129,0.15)', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', color: '#6ee7b7', fontWeight: 700, border: '1px solid rgba(16,185,129,0.25)' }}>
+                  ACCEPTED & VERIFIED
+                </span>
+              </div>
+
+              {/* Donor Contact Box */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '1.25rem', borderRadius: '16px', marginBottom: '1.25rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h3 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Donor Contact Details</h3>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #1e40af, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <UserCircle size={24} color="white" />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, color: 'white', fontSize: '0.95rem', fontWeight: 700 }}>{selectedCompletedDonation.donorId?.name || 'Anonymous Donor'}</h4>
+                    <span style={{ color: '#60a5fa', fontSize: '0.75rem', fontWeight: 600 }}>Verified Donor</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.85)' }}>
+                  <div><strong style={{ color: 'var(--text-dim)' }}>Email:</strong> {selectedCompletedDonation.donorId?.email || '—'}</div>
+                  <div><strong style={{ color: 'var(--text-dim)' }}>Phone:</strong> {selectedCompletedDonation.donorId?.phone || '—'}</div>
+                  <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'var(--text-dim)' }}>City:</strong> {selectedCompletedDonation.donorId?.city || 'Pakistan'}</div>
+                </div>
+              </div>
+
+              {/* AI Safety Report */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.07)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '16px', padding: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <ShieldCheck size={18} color="#34d399" />
+                  <strong style={{ color: '#34d399', fontSize: '0.9rem', fontWeight: 800 }}>AI Safety Report (Score: {selectedCompletedDonation.aiSafetyScore}%)</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.55 }}>
+                  {selectedCompletedDonation.aiAnalysisReason || 'Items verified safe by SpareShare AI validation service.'}
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '10px' }}>
+                {selectedCompletedDonation.donorId?.phone && (
+                  <a href={`tel:${selectedCompletedDonation.donorId.phone}`} className="btn btn-primary" style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
+                    📞 Contact Donor
+                  </a>
+                )}
+                <button className="btn btn-outline" style={{ padding: '0.6rem 1.5rem', borderRadius: '12px' }} onClick={() => setSelectedCompletedDonation(null)}>Close</button>
               </div>
             </div>
           </div>

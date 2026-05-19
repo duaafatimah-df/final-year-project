@@ -1,13 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-main: #0a0f1a;
-  --bg-surface: #111827;
-  --bg-card: #1a2236;
-  --bg-card-hover: #1f2d47;
-  --bg-glass: rgba(255,255,255,0.04);
+  --bg-main: #030712;
+  --bg-surface: #080f1e;
+  --bg-card: rgba(17, 24, 39, 0.6);
+  --bg-card-hover: rgba(17, 24, 39, 0.85);
+  --bg-glass: rgba(255,255,255,0.02);
 
-  --text-main: #f1f5f9;
+  --text-main: #f3f4f6;
   --text-muted: #94a3b8;
   --text-dim: #64748b;
 

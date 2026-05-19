@@ -105,7 +105,7 @@ const OrganizationProfile = () => {
         type: dbOrg.orgType || 'Organization',
         city: dbOrg.city || localStorage.getItem(`city_${dbOrg._id}`) || 'Pakistan',
         desc: dbOrg.bio || localStorage.getItem(`bio_${dbOrg._id}`) || `${dbOrg.name} is a verified organization on SpareShare AI, actively collecting and distributing donations across Pakistan.`,
-        image: FALLBACK_IMAGE,
+        image: dbOrg.profileBanner || localStorage.getItem(`banner_${dbOrg._id}`) || FALLBACK_IMAGE,
         logo: dbOrg.profilePic || null,
         email: dbOrg.email || '',
         phone: dbOrg.phone || '',

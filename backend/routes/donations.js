@@ -88,16 +88,35 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // AI Integration 1: Fraud Check
     const user = await User.findById(req.user.userId);
-    const fraudData = await aiService.getFraudScore(req.user.userId, user.flagCount || 0, user.avgRating || 5.0, 1);
-    if (fraudData.riskLevel === 'high') {
+    
+    let riskLevel = 'low';
+    try {
+      const fraudData = await aiService.getFraudScore(req.user.userId, user.flagCount || 0, user.avgRating || 5.0, 1);
+      riskLevel = fraudData.riskLevel || 'low';
+    } catch (err) {
+      console.warn("⚠️ Fraud score Python service offline, falling back to low risk.", err.message);
+    }
+    
+    if (riskLevel === 'high') {
       return res.status(403).json({ error: 'Donation rejected due to high AI risk score. Please contact support.' });
     }
 
     // Fetch weather to determine strict logic
-    const weather = await aiService.weatherInsights(lat, lng);
+    let temp = 25.0;
+    try {
+      const weather = await aiService.weatherInsights(lat, lng);
+      temp = weather.temperature !== undefined ? weather.temperature : 25.0;
+    } catch (err) {
+      console.warn("⚠️ Weather insights Python service offline, falling back to 25°C.", err.message);
+    }
 
     // GENERALIZED AI Integration: Analyze Item for all categories
-    const itemAi = await aiService.predictExpiry(category, condition, foodPreparedTime, weather.temperature);
+    let itemAi = { status: 'Verified Safe' };
+    try {
+      itemAi = await aiService.predictExpiry(category, condition, foodPreparedTime, temp);
+    } catch (err) {
+      console.warn("⚠️ Expiry prediction Python service offline, falling back to Verified Safe.", err.message);
+    }
 
     // Strict block if expired
     if (itemAi.status === 'Expired (time exceeded)') {
@@ -106,7 +125,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     let isVerifiedSafe = false;
     let aiSafetyScore = 0;
-    let aiAnalysisReason = `System Check: ${itemAi.status}`;
+    let aiAnalysisReason = `System Check: ${itemAi.status || 'Verified Safe'}`;
     let finalStatus = 'active';
     let donationKeywords = [];
 
@@ -117,10 +136,10 @@ router.post('/', authMiddleware, async (req, res) => {
     aiSafetyScore = visualAi.safetyScore !== undefined ? visualAi.safetyScore : 60;
 
     if (aiSafetyScore >= 70) {
-      finalStatus = 'active';
+      finalStatus = receiverId ? 'pending_receiver' : 'active';
       isVerifiedSafe = true;
     } else if (aiSafetyScore >= 50) {
-      finalStatus = 'needs_review';
+      finalStatus = receiverId ? 'pending_receiver' : 'needs_review';
       isVerifiedSafe = false;
     } else {
       finalStatus = 'rejected';

@@ -7,7 +7,7 @@ import {
   RefreshCw, ArrowRight,
   LogOut, Search, Globe, Home, Activity, Calculator,
   UploadCloud, MapPin, ScanLine, Sun, Clock, Send, ShieldCheck,
-  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles
+  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap
 } from "lucide-react";
 import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
@@ -432,7 +432,7 @@ const ContributorPortal = () => {
                 {filteredOrgs.length > 0 ? filteredOrgs.map(org => (
                   <div key={org._id} className="org-card" onClick={() => navigate(`/organization/${org._id}`)}>
                     <div className="org-card-image">
-                      <img src="https://images.pexels.com/photos/6995136/pexels-photo-6995136.jpeg?auto=compress&cs=tinysrgb&w=800" alt={org.name} loading="lazy" />
+                      <img src={org.profileBanner || org.image || "https://images.pexels.com/photos/6995136/pexels-photo-6995136.jpeg?auto=compress&cs=tinysrgb&w=800"} alt={org.name} loading="lazy" />
                       <span className="org-type-badge">{org.orgType || 'NGO'}</span>
                     </div>
                     <div className="org-card-content">
@@ -717,25 +717,66 @@ const ContributorPortal = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
                 {/* Status Hero Card */}
-                <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-xl)', padding: '2rem', position: 'relative', overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.5)' }}>
+                <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-xl)', padding: '2.5rem', position: 'relative', overflow: 'hidden', boxShadow: '0 12px 50px rgba(0,0,0,0.5)' }}>
                   <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: 200, height: 200, background: 'radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)', pointerEvents: 'none' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ background: 'rgba(255,255,255,0.15)', color: 'white', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700 }}>✦ {t(lang, 'System Check', 'سسٹم چیک')}</span>
-                        <span style={{ background: aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.25)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.25)' : 'rgba(239,68,68,0.25)', color: aiResult.recommendation === 'Accept' ? '#6ee7b7' : aiResult.recommendation === 'Review' ? '#fde047' : '#fca5a5', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700, border: `1px solid ${aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.4)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.4)' : 'rgba(239,68,68,0.4)'}` }}>
-                          {aiResult.recommendation === 'Accept' ? '✅' : aiResult.recommendation === 'Review' ? '⚠️' : '❌'} {aiResult.recommendation === 'Accept' ? t(lang, 'Approved', 'منظور شدہ') : aiResult.recommendation === 'Review' ? t(lang, 'Needs Review', 'جائزہ طلب') : t(lang, 'Rejected', 'مسترد')}
-                        </span>
-                        <span style={{ background: 'rgba(255,255,255,0.15)', color: 'white', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', fontWeight: 700 }}>🎯 {t(lang, 'Score:', 'سکور:')} {aiResult.safetyScore}%</span>
-                      </div>
-                      <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.6rem', fontWeight: 900, color: 'white', marginBottom: '12px' }}>{aiResult.itemName}</h2>
-
-                      <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '12px', marginTop: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', fontSize: '0.8rem', fontWeight: 700, color: '#6ee7b7' }}>
-                          <ShieldCheck size={16} /> {t(lang, 'AI Analysis Report', 'اے آئی تجزیاتی رپورٹ')}
+                  
+                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch', position: 'relative', zIndex: 1 }} className="rp-ai-hero-flex">
+                    {/* Left Column: Title & Score Dial */}
+                    <div style={{ flex: '1.2', minWidth: '260px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1.5rem' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                          <span style={{ background: 'rgba(255,255,255,0.15)', color: 'white', padding: '4px 12px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.5px' }}>✦ {t(lang, 'System Check', 'سسٹم چیک')}</span>
+                          <span style={{ background: aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.25)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.25)' : 'rgba(239,68,68,0.25)', color: aiResult.recommendation === 'Accept' ? '#6ee7b7' : aiResult.recommendation === 'Review' ? '#fde047' : '#fca5a5', padding: '4px 12px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, border: `1px solid ${aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.4)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.4)' : 'rgba(239,68,68,0.4)'}` }}>
+                            {aiResult.recommendation === 'Accept' ? '✅' : aiResult.recommendation === 'Review' ? '⚠️' : '❌'} {aiResult.recommendation === 'Accept' ? t(lang, 'Approved', 'منظور شدہ') : aiResult.recommendation === 'Review' ? t(lang, 'Needs Review', 'جائزہ طلب') : t(lang, 'Rejected', 'مسترد')}
+                          </span>
                         </div>
-                        <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>{aiResult.safetyNotes}</p>
+                        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '2.1rem', fontWeight: 900, color: 'white', marginBottom: '4px', letterSpacing: '-0.5px' }}>{aiResult.itemName}</h2>
+                        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>Verified Class &amp; Parameters Evaluated</p>
                       </div>
+
+                      {/* Gorgeous Modern Score Gauge dial */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: 'rgba(255,255,255,0.06)', borderRadius: '18px', padding: '1.25rem 1.5rem', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', backdropFilter: 'blur(10px)' }}>
+                        <div style={{ position: 'relative', width: '68px', height: '68px', flexShrink: 0 }}>
+                          <svg style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                            <circle cx="34" cy="34" r="28" stroke="rgba(255,255,255,0.08)" strokeWidth="5.5" fill="transparent" />
+                            <circle cx="34" cy="34" r="28" stroke={aiResult.recommendation === 'Rejected' ? '#ef4444' : aiResult.recommendation === 'Review' ? '#f59e0b' : '#10b981'} strokeWidth="5.5" fill="transparent" strokeDasharray={`${2 * Math.PI * 28}`} strokeDashoffset={`${2 * Math.PI * 28 * (1 - aiResult.safetyScore / 100)}`} style={{ strokeLinecap: 'round', transition: 'stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+                          </svg>
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: 900, color: 'white', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>{aiResult.safetyScore}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            <Zap size={14} color="#10b981" /> Safety Index
+                          </div>
+                          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: aiResult.recommendation === 'Rejected' ? '#fca5a5' : aiResult.recommendation === 'Review' ? '#fde047' : '#6ee7b7', marginTop: '2px', display: 'block' }}>
+                            {aiResult.recommendation === 'Rejected' ? t(lang, 'System Blocked', 'سسٹم بلاکڈ') : aiResult.recommendation === 'Review' ? t(lang, 'Attention Needed', 'توجہ درکار') : t(lang, 'Fully Verified', 'مکمل تصدیق شدہ')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column: AI Analysis Report glass card & User Description */}
+                    <div style={{ flex: '1.5', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div style={{ width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '20px', padding: '1.25rem 1.5rem', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.92rem', marginBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem' }}>
+                          <ShieldCheck size={18} /> {t(lang, 'AI Analysis Report', 'اے آئی تجزیاتی رپورٹ')}
+                        </div>
+                        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.85rem', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                          "{aiResult.safetyNotes}"
+                        </p>
+                      </div>
+
+                      {description && (
+                        <div style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.25rem 1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                            ✍️ {t(lang, 'Item Description', 'آئٹم کی تفصیل')}
+                          </div>
+                          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.84rem', lineHeight: 1.5, margin: 0 }}>
+                            {description}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -881,9 +922,8 @@ const ContributorPortal = () => {
           </div>
         )}
 
-        {/* ======================= ZAKAT TAB ======================= */}
         {activeTab === 'zakat' && (
-          <div className="zakat-tab-wrapper animate-fade-in" style={{ background: 'white', padding: '2rem', borderRadius: '16px' }}>
+          <div className="zakat-tab-wrapper animate-fade-in" style={{ background: 'transparent', padding: '1rem 0' }}>
             <ZakatCalculator onDonate={() => setActiveTab('home')} />
           </div>
         )}
@@ -1096,45 +1136,51 @@ const ContributorPortal = () => {
         </div>
       )}
 
-      {/* History Donation Details Modal */}
       {selectedHistoryDonation && (
-        <div className="modal-overlay" onClick={() => setSelectedHistoryDonation(null)}>
-          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
-            <div style={{ position: 'relative' }}>
+        <div className="modal-overlay" onClick={() => setSelectedHistoryDonation(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
+          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden', background: 'rgba(10, 18, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', color: 'white' }}>
+            <div style={{ position: 'relative', height: 220, overflow: 'hidden' }}>
               {selectedHistoryDonation.imageUrl ? (
-                <img src={selectedHistoryDonation.imageUrl} alt="Donation" style={{ width: '100%', height: 200, objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+                <img src={selectedHistoryDonation.imageUrl} alt="Donation" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
               ) : (
-                <div style={{ width: '100%', height: 200, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Package size={48} color="#94a3b8" />
+                <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0f172a, #1e293b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Package size={56} color="#475569" />
                 </div>
               )}
-              <button className="close-modal" onClick={() => setSelectedHistoryDonation(null)} style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%', padding: 6, cursor: 'pointer' }}><X size={20} /></button>
+              {/* Glowing overlay shadow on header image */}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(10,18,36,0.95) 100%)' }} />
+              <button className="close-modal" onClick={() => setSelectedHistoryDonation(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.85)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.6)'}><X size={16} /></button>
             </div>
 
-            <div style={{ padding: '1.5rem' }}>
-              <h2 style={{ margin: '0 0 8px', fontSize: '1.4rem', color: '#0f172a' }}>{selectedHistoryDonation.title}</h2>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                <span style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: 99, fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>{selectedHistoryDonation.category}</span>
-                <span style={{ background: selectedHistoryDonation.status === 'rejected' ? '#fef2f2' : selectedHistoryDonation.status === 'completed' ? '#f0fdf4' : '#e0f2fe', padding: '4px 10px', borderRadius: 99, fontSize: '0.8rem', color: selectedHistoryDonation.status === 'rejected' ? '#ef4444' : selectedHistoryDonation.status === 'completed' ? '#10b981' : '#0ea5e9', fontWeight: 600 }}>
+            <div style={{ padding: '1.75rem', marginTop: '-20px', position: 'relative', zIndex: 2 }}>
+              <h2 style={{ margin: '0 0 10px', fontSize: '1.75rem', fontWeight: 900, color: 'white', fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px' }}>{selectedHistoryDonation.title}</h2>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                <span style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', color: '#cbd5e1', fontWeight: 700, border: '1px solid rgba(255,255,255,0.06)' }}>{selectedHistoryDonation.category}</span>
+                <span style={{ background: selectedHistoryDonation.status === 'rejected' ? 'rgba(239,68,68,0.15)' : selectedHistoryDonation.status === 'completed' ? 'rgba(16,185,129,0.15)' : 'rgba(14,165,233,0.15)', padding: '4px 12px', borderRadius: 99, fontSize: '0.75rem', color: selectedHistoryDonation.status === 'rejected' ? '#fca5a5' : selectedHistoryDonation.status === 'completed' ? '#6ee7b7' : '#7dd3fc', fontWeight: 700, border: `1px solid ${selectedHistoryDonation.status === 'rejected' ? 'rgba(239,68,68,0.25)' : selectedHistoryDonation.status === 'completed' ? 'rgba(16,185,129,0.25)' : 'rgba(14,165,233,0.25)'}` }}>
                   {selectedHistoryDonation.status.toUpperCase()}
                 </span>
               </div>
 
-              <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '10px', marginBottom: '15px' }}>
-                <h3 style={{ margin: '0 0 8px', fontSize: '1rem', color: '#1e293b' }}>Donation Details</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.9rem', color: '#475569' }}>
-                  <div><strong style={{ color: '#1e293b' }}>Condition:</strong> {selectedHistoryDonation.condition || 'N/A'}</div>
-                  <div><strong style={{ color: '#1e293b' }}>Quantity:</strong> {selectedHistoryDonation.quantity || 'N/A'}</div>
-                  <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: '#1e293b' }}>Description:</strong> {selectedHistoryDonation.description || 'N/A'}</div>
+              {/* Obsidian-glass Details Panel */}
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '1.25rem', borderRadius: '16px', marginBottom: '1.25rem', border: '1px solid rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)' }}>
+                <h3 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Donation Parameters</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.88rem', color: 'rgba(255, 255, 255, 0.85)' }}>
+                  <div><strong style={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '2px' }}>Condition</strong> {selectedHistoryDonation.condition || 'Good'}</div>
+                  <div><strong style={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '2px' }}>Quantity</strong> {selectedHistoryDonation.quantity || 'N/A'}</div>
+                  <div style={{ gridColumn: '1 / -1', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px', marginTop: '4px' }}>
+                    <strong style={{ color: 'rgba(255,255,255,0.5)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '2px' }}>Description</strong>
+                    <p style={{ margin: 0, fontSize: '0.85rem', lineHeight: 1.4, color: 'white' }}>{selectedHistoryDonation.description || 'No description provided.'}</p>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ background: selectedHistoryDonation.status === 'rejected' ? '#fef2f2' : '#f0fdf4', border: `1px solid ${selectedHistoryDonation.status === 'rejected' ? '#fecaca' : '#a7f3d0'}`, borderRadius: '10px', padding: '15px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <ShieldCheck size={18} color={selectedHistoryDonation.status === 'rejected' ? '#ef4444' : '#10b981'} />
-                  <strong style={{ color: selectedHistoryDonation.status === 'rejected' ? '#ef4444' : '#10b981' }}>AI Safety Report (Score: {selectedHistoryDonation.aiSafetyScore}%)</strong>
+              {/* Glowing Safety Report */}
+              <div style={{ background: selectedHistoryDonation.status === 'rejected' ? 'rgba(239, 68, 68, 0.07)' : 'rgba(16, 185, 129, 0.07)', border: `1px solid ${selectedHistoryDonation.status === 'rejected' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`, borderRadius: '16px', padding: '1.25rem', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <ShieldCheck size={18} color={selectedHistoryDonation.status === 'rejected' ? '#f87171' : '#34d399'} />
+                  <strong style={{ color: selectedHistoryDonation.status === 'rejected' ? '#f87171' : '#34d399', fontSize: '0.9rem', fontWeight: 800 }}>AI Safety Report (Score: {selectedHistoryDonation.aiSafetyScore}%)</strong>
                 </div>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.55 }}>
                   {selectedHistoryDonation.aiAnalysisReason}
                 </p>
               </div>
