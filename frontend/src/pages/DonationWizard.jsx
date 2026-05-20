@@ -7,7 +7,9 @@ import { organizations } from './Home';
 import axios from 'axios';
 import './DonationWizard.css';
 
-const API = "https://spareshare-ai.up.railway.app";
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://spareshare-ai.up.railway.app';
 
 const DonationWizard = () => {
   const { orgId } = useParams();

@@ -273,17 +273,16 @@
 
 .rp-post-form { padding: 0 2rem 2rem; display: flex; flex-direction: column; gap: 1.1rem; }
 .rp-post-form label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px; }
-.rp-post-form input, .rp-post-form textarea, .rp-post-form select {
+.rp-post-form input, .rp-post-form textarea {
   width: 100%; padding: 10px 13px; border-radius: 10px;
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
   color: var(--text-main); font-family: var(--font-body); font-size: 0.9rem;
   outline: none; transition: var(--transition);
 }
-.rp-post-form input:focus, .rp-post-form textarea:focus, .rp-post-form select:focus {
+.rp-post-form input:focus, .rp-post-form textarea:focus {
   border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow);
 }
 .rp-post-form textarea { resize: vertical; min-height: 90px; }
-.rp-post-form select option { background: var(--bg-card); }
 .rp-post-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .rp-post-form .form-group { display: flex; flex-direction: column; gap: 0; }
 

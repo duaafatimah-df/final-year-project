@@ -372,25 +372,7 @@
 .drop-placeholder p { margin-top: 0.75rem; font-size: 0.85rem; line-height: 1.5; }
 .drop-preview { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; }
 
-.custom-select {
-  width: 100%;
-  padding: 11px 14px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.09);
-  color: var(--text-main);
-  font-family: var(--font-body);
-  font-size: 0.9rem;
-  outline: none;
-  cursor: pointer;
-  transition: var(--transition);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-}
-.custom-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); background-color: rgba(16,185,129,0.04); }
-.custom-select option { background: var(--bg-card); color: var(--text-main); }
+/* Inherits premium .custom-select from index.css */
 
 .submit-donate-btn {
   width: 100%;

@@ -13,9 +13,12 @@ import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
 import ProfilePage from '../components/ProfilePage';
 import SmartMap from '../components/SmartMap';
+import CustomDropdown from '../components/CustomDropdown';
 import './ContributorPortal.css';
 
-const API = "https://spareshare-ai.up.railway.app";
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://spareshare-ai.up.railway.app';
 
 // Mock Data for Charts
 const monthlyData = [
@@ -27,14 +30,12 @@ const monthlyData = [
 
 // Removed mock receiverDemands, will fetch from API
 
-const t = (lang, enText, urText) => lang === 'Eng' ? enText : urText;
-
 const ContributorPortal = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('home');
-  const { lang, setLang } = useLang(); // Global language context (like Saylani)
+  const { lang, setLang, t } = useLang(); // Global language context 
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
@@ -62,17 +63,33 @@ const ContributorPortal = () => {
 
   const [isTranslatingDesc, setIsTranslatingDesc] = useState(false);
   const [translationError, setTranslationError] = useState('');
+  const [isImageZoomed, setIsImageZoomed] = useState(false);
+  const [selectedHistoryCategory, setSelectedHistoryCategory] = useState(null);
+  const [isDescriptionTranslated, setIsDescriptionTranslated] = useState(false);
+  const originalDescriptionRef = useRef('');
 
   const handleTranslateDesc = async () => {
     if (!description) return;
+    if (isDescriptionTranslated) {
+      setDescription(originalDescriptionRef.current);
+      setIsDescriptionTranslated(false);
+      return;
+    }
+
+    originalDescriptionRef.current = description;
     setIsTranslatingDesc(true);
     setTranslationError('');
     try {
       const res = await axios.post(`${API}/api/ai/translate`, {
         text: description,
-        targetLang: lang === 'Eng' ? 'ur' : 'en'
+        targetLang: 'ur'
       });
-      setDescription(res.data.translatedText);
+      if (res.data.translatedText) {
+        setDescription(res.data.translatedText);
+        setIsDescriptionTranslated(true);
+      } else {
+        setTranslationError('❌ Translation failed');
+      }
     } catch (err) {
       setTranslationError('❌ Translation failed');
     } finally {
@@ -515,18 +532,23 @@ const ContributorPortal = () => {
 
                     <div className="form-group">
                       <label>{t(lang, 'Category', 'زمرہ')} <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="custom-select" value={category} onChange={e => {
-                        setCategory(e.target.value);
-                        setExpiryTime('');
-                        setCondition('');
-                      }} required>
-                        <option value="" disabled>Select category...</option>
-                        <option value="Food">🍛 Food</option>
-                        <option value="Medicine">💊 Medicine</option>
-                        <option value="Clothes">👕 Clothes</option>
-                        <option value="Household">🏠 Household Items</option>
-                        <option value="Grocery">🛒 Grocery</option>
-                      </select>
+                      <CustomDropdown
+                        value={category}
+                        onChange={val => {
+                          setCategory(val);
+                          setExpiryTime('');
+                          setCondition('');
+                        }}
+                        options={[
+                          { value: 'Food', label: '🍛 Food' },
+                          { value: 'Medicine', label: '💊 Medicine' },
+                          { value: 'Clothes', label: '👕 Clothes' },
+                          { value: 'Household', label: '🏠 Household Items' },
+                          { value: 'Grocery', label: '🛒 Grocery' }
+                        ]}
+                        placeholder="Select category..."
+                        required
+                      />
                     </div>
 
                     <div className="form-group">
@@ -544,12 +566,17 @@ const ContributorPortal = () => {
                     {(category === 'Clothes' || category === 'Household') && (
                       <div className="form-group">
                         <label>{t(lang, 'Condition', 'حالت')} <span style={{ color: '#ef4444' }}>*</span></label>
-                        <select className="custom-select" value={condition} onChange={e => setCondition(e.target.value)} required>
-                          <option value="" disabled>Select condition...</option>
-                          <option value="New">New / Unused</option>
-                          <option value="Good">Good / Usable</option>
-                          <option value="Used">Used / Worn</option>
-                        </select>
+                        <CustomDropdown
+                          value={condition}
+                          onChange={setCondition}
+                          options={[
+                            { value: 'New', label: 'New / Unused' },
+                            { value: 'Good', label: 'Good / Usable' },
+                            { value: 'Used', label: 'Used / Worn' }
+                          ]}
+                          placeholder="Select condition..."
+                          required
+                        />
                       </div>
                     )}
 
@@ -574,7 +601,7 @@ const ContributorPortal = () => {
                             disabled={!description || isTranslatingDesc}
                             style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
                           >
-                            {isTranslatingDesc ? 'Translating...' : `Translate to ${lang === 'Eng' ? 'Urdu' : 'English'}`}
+                            {isTranslatingDesc ? 'Translating...' : (isDescriptionTranslated ? 'Translate to English' : 'Translate to Urdu')}
                           </button>
                           {translationError && <span style={{ color: '#ef4444', fontSize: '0.75rem' }}>{translationError}</span>}
                         </div>
@@ -645,15 +672,20 @@ const ContributorPortal = () => {
 
                     <div className="form-group">
                       <label>{t(lang, 'Location (City)', 'مقام (شہر)')} <span style={{ color: '#ef4444' }}>*</span></label>
-                      <select className="custom-select" value={location} onChange={e => { setLocation(e.target.value); setLatLng(e.target.value); }} required>
-                        <option value="" disabled>Select your city...</option>
-                        <option value="Karachi">Karachi</option>
-                        <option value="Lahore">Lahore</option>
-                        <option value="Islamabad">Islamabad</option>
-                        <option value="Peshawar">Peshawar</option>
-                        <option value="Quetta">Quetta</option>
-                        <option value="Multan">Multan</option>
-                      </select>
+                      <CustomDropdown
+                        value={location}
+                        onChange={val => { setLocation(val); setLatLng(val); }}
+                        options={[
+                          { value: 'Karachi', label: 'Karachi' },
+                          { value: 'Lahore', label: 'Lahore' },
+                          { value: 'Islamabad', label: 'Islamabad' },
+                          { value: 'Peshawar', label: 'Peshawar' },
+                          { value: 'Quetta', label: 'Quetta' },
+                          { value: 'Multan', label: 'Multan' }
+                        ]}
+                        placeholder="Select your city..."
+                        required
+                      />
                     </div>
 
                     {validationError && (
@@ -721,7 +753,70 @@ const ContributorPortal = () => {
                   <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: 200, height: 200, background: 'radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)', pointerEvents: 'none' }} />
                   
                   <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch', position: 'relative', zIndex: 1 }} className="rp-ai-hero-flex">
-                    {/* Left Column: Title & Score Dial */}
+                    
+                    {/* Left Column (1/3 Weight): Click-to-Zoom Scanned Image */}
+                    {file?.preview && (
+                      <div style={{ flex: '0.8', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div 
+                          onClick={() => setIsImageZoomed(true)}
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            minHeight: '180px',
+                            maxHeight: '260px',
+                            borderRadius: '16px', 
+                            overflow: 'hidden', 
+                            border: '2px solid rgba(255,255,255,0.15)', 
+                            cursor: 'pointer', 
+                            position: 'relative',
+                            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                            transition: 'all 0.3s ease'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.borderColor = '#10b981';
+                            e.currentTarget.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.4)';
+                            e.currentTarget.querySelector('img').style.transform = 'scale(1.05)';
+                            e.currentTarget.querySelector('.zoom-hint').style.opacity = '1';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                            e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
+                            e.currentTarget.querySelector('img').style.transform = 'scale(1)';
+                            e.currentTarget.querySelector('.zoom-hint').style.opacity = '0';
+                          }}
+                        >
+                          <img 
+                            src={file.preview} 
+                            alt="Scanned item preview" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'all 0.3s ease', display: 'block' }} 
+                          />
+                          <div 
+                            className="zoom-hint"
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              background: 'rgba(0,0,0,0.4)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: 0,
+                              transition: 'all 0.3s ease',
+                              color: 'white',
+                              fontWeight: 700,
+                              fontSize: '0.85rem',
+                              gap: '6px'
+                            }}
+                          >
+                            🔍 {t(lang, 'Click to Zoom', 'بڑا کرنے کے لیے کلک کریں')}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.5px' }}>
+                          📷 {t(lang, 'Scanned Image', 'اسکین شدہ تصویر')}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Middle Column: Title & Score Dial */}
                     <div style={{ flex: '1.2', minWidth: '260px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1.5rem' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap' }}>
@@ -756,7 +851,7 @@ const ContributorPortal = () => {
                       </div>
                     </div>
 
-                    {/* Right Column: AI Analysis Report glass card & User Description */}
+                    {/* Right Column: AI Analysis Report glass card & Unconditional Description Card */}
                     <div style={{ flex: '1.5', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       <div style={{ width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '20px', padding: '1.25rem 1.5rem', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.92rem', marginBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem' }}>
@@ -767,16 +862,21 @@ const ContributorPortal = () => {
                         </p>
                       </div>
 
-                      {description && (
-                        <div style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.25rem 1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                            ✍️ {t(lang, 'Item Description', 'آئٹم کی تفصیل')}
-                          </div>
-                          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.84rem', lineHeight: 1.5, margin: 0 }}>
+                      <div style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.25rem 1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                          ✍️ {t(lang, 'Item Description', 'آئٹم کی تفصیل')}
+                        </div>
+                        {description ? (
+                          <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.84rem', lineHeight: 1.5, margin: 0 }}>
                             {description}
                           </p>
-                        </div>
-                      )}
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', fontStyle: 'italic', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
+                            <span>ℹ️</span>
+                            <span>{t(lang, 'No description provided for this item. You can add more details next time to help receivers.', 'اس آئٹم کے لیے کوئی تفصیل فراہم نہیں کی گئی ہے۔ آپ وصول کنندگان کی مدد کے لیے اگلی بار مزید تفصیلات شامل کر سکتے ہیں۔')}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -805,14 +905,6 @@ const ContributorPortal = () => {
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>{t(lang, aiResult.matchReason, aiResult.matchReason)}</p>
                   </div>
                 </div>
-
-                {/* Item image preview */}
-                {file?.preview && (
-                  <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
-                    <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.07)', fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-muted)' }}>📷 {t(lang, 'Scanned Image', 'اسکین شدہ تصویر')}</div>
-                    <img src={file.preview} alt="Donated item" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', display: 'block' }} />
-                  </div>
-                )}
 
                 {/* Matched Demand Posts */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', padding: '1.5rem' }}>
@@ -1138,7 +1230,7 @@ const ContributorPortal = () => {
 
       {selectedHistoryDonation && (
         <div className="modal-overlay" onClick={() => setSelectedHistoryDonation(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
-          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden', background: 'rgba(10, 18, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', color: 'white' }}>
+          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflowY: 'auto', maxHeight: '85vh', background: 'rgba(10, 18, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', color: 'white' }}>
             <div style={{ position: 'relative', height: 220, overflow: 'hidden' }}>
               {selectedHistoryDonation.imageUrl ? (
                 <img src={selectedHistoryDonation.imageUrl} alt="Donation" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
@@ -1186,6 +1278,13 @@ const ContributorPortal = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {isImageZoomed && file?.preview && (
+        <div className="modal-overlay" onClick={() => setIsImageZoomed(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(3, 7, 18, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setIsImageZoomed(false)} style={{ position: 'absolute', top: 24, right: 24, color: 'white', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <img src={file.preview} alt="Zoomed View" style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '16px' }} onClick={e => e.stopPropagation()} />
         </div>
       )}
 

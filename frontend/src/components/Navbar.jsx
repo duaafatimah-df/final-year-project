@@ -3,11 +3,9 @@ import { useAuth, useLang } from '../context/AuthContext';
 import { ArrowRight, LogOut, LayoutDashboard, Globe } from 'lucide-react';
 import './Navbar.css';
 
-const t = (lang, enText, urText) => lang === 'Eng' ? enText : urText;
-
 const Navbar = () => {
   const { user, logout } = useAuth();
-  const { lang, setLang } = useLang();
+  const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
 
   return (
@@ -19,9 +17,9 @@ const Navbar = () => {
         </Link>
 
         <div className="nav-links">
-          <Link to="/" className="nav-link">{t(lang, 'Explore', 'تلاش کریں')}</Link>
-          <a href="/#about" className="nav-link">{t(lang, 'About', 'ہمارے بارے میں')}</a>
-          <Link to="/zakat" className="nav-link text-green-accent">{t(lang, 'Zakat Calculator', 'زکوٰۃ کیلکولیٹر')}</Link>
+          <Link to="/" className="nav-link">{t('Explore', 'تلاش کریں')}</Link>
+          <a href="/#about" className="nav-link">{t('About', 'ہمارے بارے میں')}</a>
+          <Link to="/zakat" className="nav-link text-green-accent">{t('Zakat Calculator', 'زکوٰۃ کیلکولیٹر')}</Link>
         </div>
 
         <div className="nav-actions">
@@ -81,20 +79,20 @@ const Navbar = () => {
           {!user ? (
             <>
               <Link to="/auth/donor" className="nav-btn nav-btn-outline">
-                {t(lang, 'Donor Login', 'ڈونر لاگ ان')} <ArrowRight size={15} />
+                {t('Donor Login', 'ڈونر لاگ ان')} <ArrowRight size={15} />
               </Link>
               <Link to="/auth/receiver" className="nav-btn nav-btn-solid">
-                {t(lang, 'Receiver Signup', 'وصول کنندہ سائن اپ')} <ArrowRight size={15} />
+                {t('Receiver Signup', 'وصول کنندہ سائن اپ')} <ArrowRight size={15} />
               </Link>
             </>
           ) : (
             <div className="user-menu">
-              <span className="user-greeting">{t(lang, 'Hi', 'سلام')}, {user.name?.split(' ')[0]}</span>
+              <span className="user-greeting">{t('Hi', 'سلام')}, {user.name?.split(' ')[0]}</span>
               <button
                 onClick={() => navigate(user.role === 'donor' ? '/contributor' : user.role === 'admin' ? '/admin' : '/receiver')}
                 className="nav-btn nav-btn-outline"
               >
-                <LayoutDashboard size={15} /> {t(lang, 'Dashboard', 'ڈیش بورڈ')}
+                <LayoutDashboard size={15} /> {t('Dashboard', 'ڈیش بورڈ')}
               </button>
               <button onClick={logout} className="nav-btn" style={{ color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '7px 14px' }}>
                 <LogOut size={15} />

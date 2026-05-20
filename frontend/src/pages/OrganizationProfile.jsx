@@ -44,7 +44,9 @@ const OrganizationProfile = () => {
       // Fetch org from database
       const fetchOrg = async () => {
         try {
-          const API = "https://spareshare-ai.up.railway.app";
+          const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:5000'
+            : 'https://spareshare-ai.up.railway.app';
           const res = await axios.get(`${API}/api/users/org/${id}`);
           setDbOrg(res.data.org);
           setDbPosts(res.data.posts || []);

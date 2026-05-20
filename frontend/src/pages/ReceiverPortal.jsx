@@ -3,16 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, useLang } from '../context/AuthContext';
 import axios from 'axios';
 
-const t = (lang, enText, urText) => lang === 'Eng' ? enText : urText;
 import {
   LogOut, Search, Globe, Building2, List, BellRing,
   ShieldCheck, Phone, Mail, UserCircle, MapPin, Check, X, Camera,
   Activity, ScanLine, Clock, ArrowRight, CheckCircle2, XCircle
 } from 'lucide-react';
 import ProfilePage from '../components/ProfilePage';
+import CustomDropdown from '../components/CustomDropdown';
 import './ReceiverPortal.css';
 
-const API = "https://spareshare-ai.up.railway.app";
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://spareshare-ai.up.railway.app';
 
 const mockDonors = [
   { id: 'mock1', name: 'Ali Rahman', city: 'Karachi', bio: 'Individually contributing surplus food and medicines to local communities since 2024.', phone: '+92 300 1234567', email: 'ali.rahman@gmail.com', type: 'Individual', activeDonations: ['Paracetamol Packs', 'Surplus Rice (5kg)'] },
@@ -24,7 +26,7 @@ const mockDonors = [
 
 const ReceiverPortal = () => {
   const { user, logout } = useAuth();
-  const { lang, setLang } = useLang();
+  const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('profile');
@@ -1069,22 +1071,24 @@ const ReceiverPortal = () => {
                   value={newPostTitle}
                   onChange={(e) => setNewPostTitle(e.target.value)}
                   placeholder="e.g. Need 50 Blankets"
-                  style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #ccc' }}
+                  className="custom-input"
                   required
                 />
               </div>
               <div style={{ marginBottom: '2rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Urgency Level</label>
-                <select
+                <CustomDropdown
                   value={newPostUrgency}
-                  onChange={(e) => setNewPostUrgency(e.target.value)}
-                  style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #ccc' }}
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
+                  onChange={setNewPostUrgency}
+                  options={[
+                    { value: 'Low', label: 'Low' },
+                    { value: 'Medium', label: 'Medium' },
+                    { value: 'High', label: 'High' },
+                    { value: 'Critical', label: 'Critical' }
+                  ]}
+                  placeholder="Select urgency level..."
+                  required
+                />
               </div>
               <div style={{ marginBottom: '2rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Description</label>
@@ -1092,7 +1096,8 @@ const ReceiverPortal = () => {
                   value={newPostDesc}
                   onChange={(e) => setNewPostDesc(e.target.value)}
                   placeholder="Explain exactly what you need and why..."
-                  style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', border: '1px solid #ccc', minHeight: '100px' }}
+                  className="custom-input"
+                  style={{ minHeight: '100px', resize: 'vertical' }}
                 />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>

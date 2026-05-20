@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Leaf, ShieldCheck, Cpu, Heart, CheckCircle2, Filter, MapPin, Zap, Users, Package, UploadCloud, Search, Handshake } from 'lucide-react';
 import { useLang } from '../context/AuthContext';
 import axios from 'axios';
+import CustomDropdown from '../components/CustomDropdown';
 import './Home.css';
 
 const t = (lang, en, ur) => lang === 'Eng' ? en : ur;
@@ -45,7 +46,9 @@ const Home = () => {
   useEffect(() => {
     const fetchReceivers = async () => {
       try {
-        const API = "https://spareshare-ai.up.railway.app";
+        const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'http://localhost:5000'
+          : 'https://spareshare-ai.up.railway.app';
         const res = await axios.get(`${API}/api/users/receivers`);
         setDbReceivers(res.data);
       } catch (err) {
@@ -238,13 +241,18 @@ const Home = () => {
           </div>
           <div className="city-filter-box">
             <Filter size={16} color="#64748b" />
-            <select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} className="city-select">
-              <option value="All">{t(lang, 'All Cities', 'تمام شہر')}</option>
-              <option value="Karachi">{t(lang, 'Karachi', 'کراچی')}</option>
-              <option value="Lahore">{t(lang, 'Lahore', 'لاہور')}</option>
-              <option value="Islamabad">{t(lang, 'Islamabad', 'اسلام آباد')}</option>
-              <option value="Peshawar">{t(lang, 'Peshawar', 'پشاور')}</option>
-            </select>
+            <CustomDropdown
+              value={selectedCity}
+              onChange={setSelectedCity}
+              options={[
+                { value: 'All', label: t(lang, 'All Cities', 'تمام شہر') },
+                { value: 'Karachi', label: t(lang, 'Karachi', 'کراچی') },
+                { value: 'Lahore', label: t(lang, 'Lahore', 'لاہور') },
+                { value: 'Islamabad', label: t(lang, 'Islamabad', 'اسلام آباد') },
+                { value: 'Peshawar', label: t(lang, 'Peshawar', 'پشاور') }
+              ]}
+              style={{ width: '160px', padding: '8px 12px' }}
+            />
           </div>
         </div>
 

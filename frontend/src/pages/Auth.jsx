@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Building2, User, Mail, Lock, FileText, ArrowRight, Eye, EyeOff, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import CustomDropdown from '../components/CustomDropdown';
 import './Auth.css';
 
 const Auth = () => {
@@ -126,17 +127,17 @@ const Auth = () => {
                   <label>Organization Type</label>
                   <div className="input-icon-wrapper">
                     <Building2 className="input-icon" size={18} />
-                    <select 
-                      value={orgType} 
-                      onChange={(e) => setOrgType(e.target.value)} 
-                      className="input-field with-icon"
-                      style={{appearance: 'none', backgroundColor: 'transparent'}}
-                    >
-                      <option value="NGO">Registered NGO</option>
-                      <option value="Foundation">Foundation</option>
-                      <option value="Community Group">Community Group</option>
-                      <option value="Instagram Page">Instagram / Social Page</option>
-                    </select>
+                    <CustomDropdown
+                      value={orgType}
+                      onChange={setOrgType}
+                      options={[
+                        { value: 'NGO', label: 'Registered NGO' },
+                        { value: 'Foundation', label: 'Foundation' },
+                        { value: 'Community Group', label: 'Community Group' },
+                        { value: 'Instagram Page', label: 'Instagram / Social Page' }
+                      ]}
+                      style={{ paddingLeft: '40px' }}
+                    />
                   </div>
                 </div>
                 <div className="form-group">

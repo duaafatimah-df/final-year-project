@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const AI_URL = 'https://spareshare.up.railway.app/ai';
+const AI_URL = process.env.PYTHON_AI_URL || 'http://127.0.0.1:8000/ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 

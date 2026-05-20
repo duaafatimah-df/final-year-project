@@ -2,7 +2,9 @@ import { createContext, useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const API = "https://spareshare-ai.up.railway.app";
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://spareshare-ai.up.railway.app';
 
 const AuthContext = createContext();
 export const LangContext = createContext();
@@ -91,10 +93,82 @@ export const AuthProvider = ({ children }) => {
     navigate('/');
   };
 
+  const [cache, setCache] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('spareshare_translations_cache') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const translateText = async (text, targetLang = 'ur') => {
+    if (!text) return '';
+    const cacheKey = `${text}_${targetLang}`;
+    if (cache[cacheKey]) return cache[cacheKey];
+
+    try {
+      const res = await axios.post(`${API}/api/ai/translate`, { text, targetLang });
+      const translated = res.data.translatedText;
+      if (translated) {
+        setCache(prev => {
+          const next = { ...prev, [cacheKey]: translated };
+          localStorage.setItem('spareshare_translations_cache', JSON.stringify(next));
+          return next;
+        });
+        return translated;
+      }
+    } catch (err) {
+      console.error('Translation failed', err);
+    }
+    return '';
+  };
+
+  const t = (first, second, third) => {
+    let enText, urText;
+    if (third !== undefined) {
+      // Signatures like t(lang, enText, urText)
+      enText = second;
+      urText = third;
+    } else {
+      // Signatures like t(enText, urText)
+      enText = first;
+      urText = second;
+    }
+
+    if (lang === 'Eng') return enText;
+    if (!enText) return '';
+    const cacheKey = `${enText}_ur`;
+    if (cache[cacheKey]) {
+      return cache[cacheKey];
+    }
+    const activeFetches = window._activeTranslationFetches = window._activeTranslationFetches || new Set();
+    if (!activeFetches.has(cacheKey)) {
+      activeFetches.add(cacheKey);
+      axios.post(`${API}/api/ai/translate`, { text: enText, targetLang: 'ur' })
+        .then(res => {
+          const translated = res.data.translatedText;
+          if (translated) {
+            setCache(prev => {
+              const next = { ...prev, [cacheKey]: translated };
+              localStorage.setItem('spareshare_translations_cache', JSON.stringify(next));
+              return next;
+            });
+          }
+        })
+        .catch(err => {
+          console.error('Background translation failed for:', enText, err);
+        })
+        .finally(() => {
+          activeFetches.delete(cacheKey);
+        });
+    }
+    return urText || enText;
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
-    <LangContext.Provider value={{ lang, setLang }}>
+    <LangContext.Provider value={{ lang, setLang, t, translateText }}>
       <AuthContext.Provider value={{ user, login, register, logout }}>
         {children}
       </AuthContext.Provider>

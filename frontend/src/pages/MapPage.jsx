@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { X, Filter, MapPin, Clock, Package, Loader2, AlertCircle, List } from 'lucide-react';
+import CustomDropdown from '../components/CustomDropdown';
 import './MapPage.css';
 
-const API = "https://spareshare-ai.up.railway.app";
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : 'https://spareshare-ai.up.railway.app';
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const CATEGORY_ICONS_EMOJI = { Food: '🍛', Medicine: '💊', Clothes: '👕', Grocery: '🛒' };
@@ -244,12 +247,17 @@ export default function MapPage() {
               {CATEGORY_ICONS_EMOJI[cat] || '🔍'} {cat}
             </button>
           ))}
-          <select className="mc-dist" value={maxKm} onChange={e => setMaxKm(Number(e.target.value))}>
-            <option value={5}>5 km</option>
-            <option value={10}>10 km</option>
-            <option value={25}>25 km</option>
-            <option value={50}>50 km</option>
-          </select>
+          <CustomDropdown
+            value={maxKm}
+            onChange={setMaxKm}
+            options={[
+              { value: 5, label: '5 km' },
+              { value: 10, label: '10 km' },
+              { value: 25, label: '25 km' },
+              { value: 50, label: '50 km' }
+            ]}
+            style={{ width: '120px', padding: '8px 12px' }}
+          />
         </div>
         <button className="mc-list-toggle" onClick={() => setShowList(v => !v)}>
           <List size={16} /> {showList ? 'Hide List' : 'Show List'}

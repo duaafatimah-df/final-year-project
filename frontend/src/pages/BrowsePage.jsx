@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Search, Filter, MapPin, Clock, Package, AlertCircle, X, Loader2, Map } from 'lucide-react';
+import CustomDropdown from '../components/CustomDropdown';
 import './BrowsePage.css';
 
 const API = import.meta.env.VITE_API_URL;
@@ -153,15 +154,22 @@ export default function BrowsePage() {
 
           {/* Distance + expiry filters */}
           <div className="bf-controls">
-            <label className="bf-control">
-              <MapPin size={14} /> Max Distance:
-              <select value={maxKm} onChange={e => setMaxKm(Number(e.target.value))}>
-                <option value={5}>5 km</option>
-                <option value={10}>10 km</option>
-                <option value={25}>25 km</option>
-                <option value={50}>50 km</option>
-              </select>
-            </label>
+            <div className="bf-control" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                <MapPin size={14} /> Max Distance:
+              </span>
+              <CustomDropdown
+                value={maxKm}
+                onChange={setMaxKm}
+                options={[
+                  { value: 5, label: '5 km' },
+                  { value: 10, label: '10 km' },
+                  { value: 25, label: '25 km' },
+                  { value: 50, label: '50 km' }
+                ]}
+                style={{ width: '120px', padding: '8px 12px' }}
+              />
+            </div>
             <label className="bf-toggle">
               <input type="checkbox" checked={expirySoon} onChange={e => setExpirySoon(e.target.checked)} />
               <Clock size={14} /> Expiring Soon
