@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 // Configure transporter
 const getTransporter = () => {
@@ -22,7 +23,10 @@ const getTransporter = () => {
     if ((host && host.includes('gmail')) || (!host && user.includes('gmail.com'))) {
       return nodemailer.createTransport({
         service: 'gmail',
-        auth: { user, pass }
+        auth: { user, pass },
+        connectionTimeout: 5000, // 5 seconds connection timeout
+        greetingTimeout: 5000,
+        socketTimeout: 10000
       });
     } else if (host) {
       return nodemailer.createTransport({
@@ -32,7 +36,10 @@ const getTransporter = () => {
         auth: { user, pass },
         tls: {
           rejectUnauthorized: false // Avoid self-signed certificate rejections
-        }
+        },
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000
       });
     }
   }
@@ -40,16 +47,61 @@ const getTransporter = () => {
 };
 
 const sendEmail = async ({ to, subject, html, text }) => {
+  // 1. Try Brevo HTTP API (Port 443 - Never Blocked on live servers)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      await axios.post('https://api.brevo.com/v3/smtp/email', {
+        sender: { name: "SpareShare AI", email: process.env.SMTP_USER || "spareshareai@gmail.com" },
+        to: [{ email: to }],
+        subject: subject,
+        htmlContent: html,
+        textContent: text
+      }, {
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'content-type': 'application/json'
+        }
+      });
+      console.log(`✉️ Email sent successfully via Brevo HTTP API to ${to}`);
+      return true;
+    } catch (err) {
+      console.error('❌ Brevo HTTP API Error:', err.response?.data || err.message);
+    }
+  }
+
+  // 2. Try Resend HTTP API (Port 443 - Never Blocked on live servers)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      await axios.post('https://api.resend.com/emails', {
+        from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        to: to,
+        subject: subject,
+        html: html,
+        text: text
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'content-type': 'application/json'
+        }
+      });
+      console.log(`✉️ Email sent successfully via Resend HTTP API to ${to}`);
+      return true;
+    } catch (err) {
+      console.error('❌ Resend HTTP API Error:', err.response?.data || err.message);
+    }
+  }
+
+  // 3. Try Nodemailer SMTP (Default fallback)
   const transporter = getTransporter();
   const from = process.env.EMAIL_FROM || 'SpareShare <noreply@spareshare.com>';
 
   if (transporter) {
     try {
       const info = await transporter.sendMail({ from, to, subject, html, text });
-      console.log(`✉️ Email sent successfully to ${to}. Message ID: ${info.messageId}`);
+      console.log(`✉️ Email sent successfully via SMTP to ${to}. Message ID: ${info.messageId}`);
       return true;
     } catch (err) {
-      console.error(`❌ Error sending real email to ${to}:`, err);
+      console.error(`❌ Error sending real SMTP email to ${to}:`, err);
       // Fall back to mock if real fails
     }
   }
