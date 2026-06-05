@@ -73,7 +73,7 @@ const sendEmail = async ({ to, subject, html, text }) => {
   if (process.env.RESEND_API_KEY) {
     try {
       await axios.post('https://api.resend.com/emails', {
-        from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        from: 'SpareShare AI <onboarding@resend.dev>',
         to: to,
         subject: subject,
         html: html,
