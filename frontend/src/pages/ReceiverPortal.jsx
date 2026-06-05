@@ -6,7 +6,7 @@ import axios from 'axios';
 import {
   LogOut, Search, Globe, Building2, List, BellRing,
   ShieldCheck, Phone, Mail, UserCircle, MapPin, Check, X, Camera,
-  Activity, ScanLine, Clock, ArrowRight, CheckCircle2, XCircle
+  Activity, ScanLine, Clock, ArrowRight, CheckCircle2, XCircle, Trash2
 } from 'lucide-react';
 import ProfilePage from '../components/ProfilePage';
 import CustomDropdown from '../components/CustomDropdown';
@@ -14,7 +14,7 @@ import './ReceiverPortal.css';
 
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
-  : 'https://spareshare-ai.up.railway.app';
+  : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
 
 const mockDonors = [
   { id: 'mock1', name: 'Ali Rahman', city: 'Karachi', bio: 'Individually contributing surplus food and medicines to local communities since 2024.', phone: '+92 300 1234567', email: 'ali.rahman@gmail.com', type: 'Individual', activeDonations: ['Paracetamol Packs', 'Surplus Rice (5kg)'] },
@@ -25,7 +25,7 @@ const mockDonors = [
 ];
 
 const ReceiverPortal = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
 
@@ -43,6 +43,9 @@ const ReceiverPortal = () => {
   const [profileBio, setProfileBio] = useState('');
   const [profileCity, setProfileCity] = useState('');
   const [profileBanner, setProfileBanner] = useState('');
+  const [profileAddress, setProfileAddress] = useState('');
+  const [profileLat, setProfileLat] = useState('');
+  const [profileLng, setProfileLng] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Modals and Interaction State
@@ -55,8 +58,13 @@ const ReceiverPortal = () => {
   const [selectedMyPost, setSelectedMyPost] = useState(null);
 
   const [newPostTitle, setNewPostTitle] = useState('');
+  const [newPostCategory, setNewPostCategory] = useState('Food');
   const [newPostUrgency, setNewPostUrgency] = useState('Medium');
   const [newPostDesc, setNewPostDesc] = useState('');
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
 
   useEffect(() => {
     const loadProfileData = async () => {
@@ -68,6 +76,9 @@ const ReceiverPortal = () => {
         setProfileBio(u.bio || localStorage.getItem(`bio_${user?.id}`) || '');
         setProfileCity(u.city || localStorage.getItem(`city_${user?.id}`) || 'Pakistan');
         setProfileBanner(u.profileBanner || localStorage.getItem(`banner_${user?.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop');
+        setProfileAddress(u.location?.address || '');
+        setProfileLat(u.location?.lat !== undefined ? u.location.lat : '');
+        setProfileLng(u.location?.lng !== undefined ? u.location.lng : '');
       } catch (err) {
         console.error('Failed to load profile from DB', err);
         const savedBio = localStorage.getItem(`bio_${user?.id}`) || '';
@@ -92,14 +103,18 @@ const ReceiverPortal = () => {
       localStorage.setItem(`city_${user?.id}`, profileCity);
       localStorage.setItem(`banner_${user?.id}`, profileBanner);
 
-      await axios.put(`${API}/api/users/me`, {
+      const res = await axios.put(`${API}/api/users/me`, {
         bio: profileBio,
         city: profileCity,
-        profileBanner: profileBanner
+        profileBanner: profileBanner,
+        address: profileAddress,
+        lat: profileLat,
+        lng: profileLng
       }, {
         headers: { 'x-auth-token': localStorage.getItem('token') }
       });
 
+      updateUser(res.data);
       setIsEditingProfile(false);
     } catch (err) {
       console.error("Failed to save profile:", err);
@@ -119,9 +134,23 @@ const ReceiverPortal = () => {
 
   const fetchIncoming = async () => {
     try {
-      const res = await axios.get(`${API}/api/donations/incoming`,
+      const res = await axios.get(`${API}/api/notifications`,
         { headers: { 'x-auth-token': localStorage.getItem('token') } });
-      setIncomingRequests(res.data);
+      const mapped = res.data
+        .filter(notif => notif.status === 'pending')
+        .map(notif => {
+          if (!notif.donationId) return null;
+          return {
+            ...notif.donationId,
+            _id: notif.donationId._id,
+            notificationId: notif._id,
+            donorId: notif.donorId,
+            notificationTitle: notif.title,
+            notificationMessage: notif.message,
+            notificationStatus: notif.status
+          };
+        }).filter(Boolean);
+      setIncomingRequests(mapped);
     } catch (err) { console.error('Error fetching incoming', err); }
   };
 
@@ -148,26 +177,57 @@ const ReceiverPortal = () => {
 
   const handleAcceptRequest = async (reqId, donorDetails) => {
     try {
-      await axios.put(`${API}/api/donations/${reqId}/status`,
-        { status: 'accepted' },
-        { headers: { 'x-auth-token': localStorage.getItem('token') } }
-      );
+      const reqItem = incomingRequests.find(r => r._id === reqId);
+      const notifId = reqItem?.notificationId;
+
+      if (notifId) {
+        await axios.put(`${API}/api/notifications/${notifId}/accept`,
+          {},
+          { headers: { 'x-auth-token': localStorage.getItem('token') } }
+        );
+      } else {
+        // Fallback for match suggestions claim flow
+        await axios.put(`${API}/api/notifications/claim/${reqId}`,
+          {},
+          { headers: { 'x-auth-token': localStorage.getItem('token') } }
+        );
+      }
+
       setRequestStatus({ ...requestStatus, [reqId]: 'accepted' });
       setAcceptedDonor(donorDetails);
       setSelectedRequest(null);
       fetchCompleted(); // Refresh completed list
-    } catch (err) { console.error(err); }
+      fetchIncoming(); // Refresh incoming list
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || 'Claim failed. Try again.';
+      alert(`⚠️ ${errMsg}`);
+    }
   };
 
   const handleRejectRequest = async (reqId) => {
     try {
-      await axios.put(`${API}/api/donations/${reqId}/status`,
-        { status: 'rejected' },
-        { headers: { 'x-auth-token': localStorage.getItem('token') } }
-      );
+      const reqItem = incomingRequests.find(r => r._id === reqId);
+      const notifId = reqItem?.notificationId;
+
+      if (notifId) {
+        await axios.put(`${API}/api/notifications/${notifId}/reject`,
+          {},
+          { headers: { 'x-auth-token': localStorage.getItem('token') } }
+        );
+      } else {
+        await axios.put(`${API}/api/donations/${reqId}/status`,
+          { status: 'rejected' },
+          { headers: { 'x-auth-token': localStorage.getItem('token') } }
+        );
+      }
       setRequestStatus({ ...requestStatus, [reqId]: 'rejected' });
       setSelectedRequest(null);
-    } catch (err) { console.error(err); }
+      fetchIncoming(); // Refresh list
+    } catch (err) {
+      console.error(err);
+      alert('Dismiss failed.');
+    }
   };
 
   const handleCreatePost = async (e) => {
@@ -176,6 +236,7 @@ const ReceiverPortal = () => {
     try {
       const res = await axios.post(`${API}/api/posts`, {
         title: newPostTitle,
+        category: newPostCategory,
         urgency: newPostUrgency,
         desc: newPostDesc || 'No description provided.'
       }, {
@@ -183,7 +244,7 @@ const ReceiverPortal = () => {
       });
       setMyPosts([res.data, ...myPosts]);
       setShowCreatePost(false);
-      setNewPostTitle(''); setNewPostDesc('');
+      setNewPostTitle(''); setNewPostDesc(''); setNewPostCategory('Food');
     } catch (err) { console.error(err); }
   };
 
@@ -212,7 +273,7 @@ const ReceiverPortal = () => {
           <button className={`nav-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
             <Building2 size={18} /> {lang === 'Eng' ? 'NGO Profile' : 'این جی او پروفائل'}
           </button>
-          <button className={`nav-tab ${activeTab === 'ai_matches' ? 'active' : ''}`} onClick={() => setActiveTab('ai_matches')} style={{ position: 'relative' }}>
+          <button className={`nav-tab ${activeTab === 'ai_matches' ? 'active' : ''}`} onClick={() => { setActiveTab('ai_matches'); fetchAiMatches(); }} style={{ position: 'relative' }}>
             <ScanLine size={18} /> {lang === 'Eng' ? 'AI Matches' : 'اے آئی میچز'}
             {aiMatches.length > 0 && (
               <span style={{ marginLeft: 4, background: '#3b82f6', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
@@ -220,10 +281,10 @@ const ReceiverPortal = () => {
               </span>
             )}
           </button>
-          <button className={`nav-tab ${activeTab === 'my_posts' ? 'active' : ''}`} onClick={() => setActiveTab('my_posts')}>
+          <button className={`nav-tab ${activeTab === 'my_posts' ? 'active' : ''}`} onClick={() => { setActiveTab('my_posts'); fetchMyPosts(); }}>
             <List size={18} /> {lang === 'Eng' ? 'My Demand Posts' : 'میری پوسٹس'}
           </button>
-          <button className={`nav-tab ${activeTab === 'incoming' ? 'active' : ''}`} onClick={() => setActiveTab('incoming')} style={{ position: 'relative' }}>
+          <button className={`nav-tab ${activeTab === 'incoming' ? 'active' : ''}`} onClick={() => { setActiveTab('incoming'); fetchIncoming(); }} style={{ position: 'relative' }}>
             <BellRing size={18} /> {lang === 'Eng' ? 'Incoming' : 'آنے والے'}
             {incomingRequests.filter(r => !requestStatus[r._id]).length > 0 && (
               <span style={{
@@ -237,7 +298,7 @@ const ReceiverPortal = () => {
               </span>
             )}
           </button>
-          <button className={`nav-tab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => setActiveTab('completed')} style={{ position: 'relative' }}>
+          <button className={`nav-tab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => { setActiveTab('completed'); fetchCompleted(); }} style={{ position: 'relative' }}>
             <CheckCircle2 size={18} /> {lang === 'Eng' ? 'Completed' : 'مکمل'}
             {completedDonations.length > 0 && (
               <span style={{ marginLeft: 4, background: '#10b981', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
@@ -296,7 +357,16 @@ const ReceiverPortal = () => {
             onClick={() => setShowProfile(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
           >
-            <UserCircle size={20} /> {user?.name?.split(' ')[0]}
+            {user?.profilePic ? (
+              <img 
+                src={user.profilePic} 
+                alt={user.name} 
+                style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} 
+              />
+            ) : (
+              <UserCircle size={20} />
+            )}
+            <span>{user?.name?.split(' ')[0]}</span>
           </button>
           <button className="logout-btn" onClick={handleLogout}>
             <LogOut size={16} /> {lang === 'Eng' ? 'Logout' : 'لاگ آؤٹ'}
@@ -313,8 +383,12 @@ const ReceiverPortal = () => {
           <div className="receiver-profile-view animate-fade-in">
             <div className="rp-header-banner" style={{ backgroundImage: `linear-gradient(to bottom, rgba(10,15,26,0.3) 0%, rgba(10,15,26,0.95) 100%), url(${profileBanner})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
               <div className="rp-header-content">
-                <div className="rp-logo-container">
-                  <UserCircle size={80} color="#fff" />
+                <div className="rp-logo-container" style={{ width: 90, height: 90, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', border: '2px solid #10b981' }}>
+                  {user?.profilePic ? (
+                    <img src={user.profilePic} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <UserCircle size={80} color="#fff" />
+                  )}
                 </div>
                 <div>
                   <h1 style={{ color: 'white', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)', fontWeight: 900 }}>{user?.name || 'Your Organization'}</h1>
@@ -372,7 +446,7 @@ const ReceiverPortal = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>📍 Organization Location</label>
+                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>📍 Organization City</label>
                       <input
                         type="text"
                         value={profileCity}
@@ -416,6 +490,75 @@ const ReceiverPortal = () => {
                       </div>
                     </div>
                   </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>🏠 Full Street Address</label>
+                      <input
+                        type="text"
+                        value={profileAddress}
+                        onChange={e => setProfileAddress(e.target.value)}
+                        placeholder="e.g. House 4-B, Street 3, Block 6, Gul Colony"
+                        style={{ width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: 'white', fontSize: '0.93rem', transition: 'all 0.2s' }}
+                        onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 10px rgba(16,185,129,0.2)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>🧭 Latitude</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={profileLat}
+                        onChange={e => setProfileLat(e.target.value)}
+                        placeholder="Latitude"
+                        style={{ width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: 'white', fontSize: '0.93rem', transition: 'all 0.2s' }}
+                        onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 10px rgba(16,185,129,0.2)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>🧭 Longitude</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={profileLng}
+                        onChange={e => setProfileLng(e.target.value)}
+                        placeholder="Longitude"
+                        style={{ width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', color: 'white', fontSize: '0.93rem', transition: 'all 0.2s' }}
+                        onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 10px rgba(16,185,129,0.2)'; }}
+                        onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ fontSize: '0.8rem', padding: '8px 14px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', cursor: 'pointer' }}
+                      onClick={() => {
+                        if (navigator.geolocation) {
+                          navigator.geolocation.getCurrentPosition(
+                            pos => {
+                              setProfileLat(pos.coords.latitude);
+                              setProfileLng(pos.coords.longitude);
+                              alert("Coordinates detected: " + pos.coords.latitude + ", " + pos.coords.longitude);
+                            },
+                            err => alert("Error detecting coordinates. Try manually.")
+                          );
+                        } else {
+                          alert("Geolocation not supported.");
+                        }
+                      }}
+                    >
+                      📍 Detect Organization Coordinates
+                    </button>
+                  </div>
+
                   <div>
                     <label style={{ display: 'block', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', color: 'var(--text-muted)' }}>📝 About Your Organization</label>
                     <textarea
@@ -429,7 +572,7 @@ const ReceiverPortal = () => {
                     />
                   </div>
                   <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '14px', fontSize: '0.85rem', color: '#6ee7b7', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    💡 <strong>Tip:</strong> A complete profile with a custom banner and location gets 3x more donations!
+                    💡 <strong>Tip:</strong> A complete profile with a custom banner, coordinates, and full address gets 3x more donations!
                   </div>
                 </div>
               ) : (
@@ -450,6 +593,19 @@ const ReceiverPortal = () => {
                         <Phone size={16} color="#10b981" /> {user?.phone}
                       </div>
                     )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                      <MapPin size={16} color="#10b981" /> {profileCity}
+                    </div>
+                    {profileAddress && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.9rem', width: '100%', marginTop: '6px' }}>
+                        <MapPin size={16} color="#34d399" /> <strong>Full Address:</strong> {profileAddress}
+                      </div>
+                    )}
+                    {profileLat && profileLng && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.8rem', paddingLeft: '22px' }}>
+                        <span>🧭 Coordinates: ({profileLat}, {profileLng})</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -459,7 +615,7 @@ const ReceiverPortal = () => {
             <div className="rp-about-section glass-panel" style={{ marginTop: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>All Demand Posts</h2>
-                <button className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem', borderRadius: '12px' }} onClick={() => setActiveTab('my_posts')}>
+                <button className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem', borderRadius: '12px' }} onClick={() => { setActiveTab('my_posts'); fetchMyPosts(); }}>
                   + Create New
                 </button>
               </div>
@@ -471,7 +627,7 @@ const ReceiverPortal = () => {
                     <div key={post._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '14px', background: 'rgba(255,255,255,0.02)', transition: 'all 0.2s', cursor: 'pointer' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.25)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
-                      onClick={() => setActiveTab('my_posts')}
+                      onClick={() => { setActiveTab('my_posts'); fetchMyPosts(); }}
                     >
                       <div>
                         <p style={{ fontWeight: 700, color: 'white', margin: 0, fontSize: '0.95rem' }}>{post.title}</p>
@@ -596,9 +752,52 @@ const ReceiverPortal = () => {
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
                     {/* Top notification banner */}
-                    <div style={{ background: 'linear-gradient(135deg, #064e3b, #047857)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <BellRing size={14} color="#a7f3d0" />
-                      <span style={{ color: '#a7f3d0', fontSize: '0.8rem', fontWeight: 600 }}>New Donation Request • {timeAgo}</span>
+                    <div style={{ background: 'linear-gradient(135deg, #064e3b, #047857)', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <BellRing size={14} color="#a7f3d0" />
+                        <span style={{ color: '#a7f3d0', fontSize: '0.8rem', fontWeight: 600 }}>New Donation Request • {timeAgo}</span>
+                      </div>
+                      {req.notificationId && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm("Are you sure you want to delete this notification?")) {
+                              try {
+                                await axios.delete(`${API}/api/notifications/${req.notificationId}`, {
+                                  headers: { 'x-auth-token': localStorage.getItem('token') }
+                                });
+                                fetchIncoming();
+                              } catch (err) {
+                                console.error("Failed to delete notification:", err);
+                                alert("Failed to delete notification.");
+                              }
+                            }
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#fca5a5',
+                            cursor: 'pointer',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'background 0.2s, color 0.2s'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                            e.currentTarget.style.color = '#ef4444';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#fca5a5';
+                          }}
+                          title="Delete Notification"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', gap: '1.5rem', padding: '1.25rem 1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -622,7 +821,11 @@ const ReceiverPortal = () => {
                       {/* Donor info */}
                       <div style={{ flex: 1, minWidth: 180 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                          <UserCircle size={20} color="#10b981" />
+                          {req.donorId?.profilePic ? (
+                            <img src={req.donorId.profilePic} alt={req.donorId.name} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            <UserCircle size={20} color="#10b981" />
+                          )}
                           <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{req.donorId?.name || 'Anonymous Donor'}</span>
                           <span style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.2)' }}>Verified Donor</span>
                         </div>
@@ -639,13 +842,19 @@ const ReceiverPortal = () => {
                       </div>
 
                       {/* CTA */}
-                      <button
-                        className="btn btn-primary"
-                        style={{ flexShrink: 0, fontSize: '0.85rem', padding: '0.6rem 1.2rem' }}
-                        onClick={e => { e.stopPropagation(); setSelectedRequest(req); }}
-                      >
-                        Review Request →
-                      </button>
+                      {req.status === 'completed' ? (
+                        <div style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 800, padding: '0.6rem 1rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                          Donation already accepted
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-primary"
+                          style={{ flexShrink: 0, fontSize: '0.85rem', padding: '0.6rem 1.2rem' }}
+                          onClick={e => { e.stopPropagation(); setSelectedRequest(req); }}
+                        >
+                          Review Request →
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -756,7 +965,8 @@ const ReceiverPortal = () => {
                           onClick={() => handleAcceptRequest(match._id, {
                             donorName: match.donorId.name,
                             donorPhone: match.donorId.phone,
-                            donorEmail: match.donorId.email
+                            donorEmail: match.donorId.email,
+                            donorPic: match.donorId.profilePic
                           })}
                         >
                           ⚡ Accept AI Recommendation
@@ -819,7 +1029,8 @@ const ReceiverPortal = () => {
                         onClick={() => handleAcceptRequest(match._id, {
                           donorName: match.donorId?.name,
                           donorPhone: match.donorId?.phone || 'No Phone',
-                          donorEmail: match.donorId?.email || 'No Email'
+                          donorEmail: match.donorId?.email || 'No Email',
+                          donorPic: match.donorId?.profilePic
                         })}
                       >
                         ⚡ Accept AI Match
@@ -829,6 +1040,81 @@ const ReceiverPortal = () => {
                 ))
               )}
             </div>
+          </div>
+        )}
+        
+        {/* ============ COMPLETED DONATIONS TAB CONTENT ============ */}
+        {activeTab === 'completed' && (
+          <div className="animate-fade-in" style={{ padding: '0.5rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Completed Donations</h2>
+              <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', borderRadius: 99, padding: '4px 14px', fontSize: '0.8rem', fontWeight: 800, border: '1px solid rgba(16,185,129,0.25)' }}>
+                ✅ {completedDonations.length} received
+              </span>
+            </div>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
+              All donations your organization has accepted — click any card to view full details, donor info, and AI safety report.
+            </p>
+
+            {completedDonations.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 20, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                <CheckCircle2 size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                <h3 style={{ color: 'var(--text-dim)', marginBottom: '0.5rem' }}>No Completed Donations Yet</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>When you accept donation requests, they'll be stored here with all details.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+                {completedDonations.map(don => (
+                  <div key={don._id}
+                    style={{
+                      background: 'rgba(30, 41, 59, 0.4)',
+                      border: '1px solid rgba(16, 185, 129, 0.15)',
+                      borderRadius: '20px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.25s',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+                      backdropFilter: 'blur(10px)'
+                    }}
+                    onClick={() => setSelectedCompletedDonation(don)}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'rgba(16,185,129,0.45)';
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                      e.currentTarget.style.boxShadow = '0 12px 40px rgba(16, 185, 129, 0.15)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'rgba(16,185,129,0.15)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.35)';
+                    }}
+                  >
+                    <div style={{ background: 'linear-gradient(135deg, #022c22 0%, #064e3b 100%)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#6ee7b7', fontSize: '0.75rem', fontWeight: 800 }}>✅ RECEIVED</span>
+                      <span style={{ color: '#a7f3d0', fontSize: '0.72rem' }}>
+                        {new Date(don.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div style={{ padding: '1.25rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      {don.imageUrl ? (
+                        <img src={don.imageUrl} alt="Donation" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }} onError={e => e.target.style.display = 'none'} />
+                      ) : (
+                        <div style={{ width: 64, height: 64, borderRadius: '12px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <CheckCircle2 size={24} color="#10b981" />
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{don.title}</h3>
+                        <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Category: <strong style={{ color: '#10b981' }}>{don.category || 'General'}</strong></p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>By {don.donorId?.name || 'Anonymous'}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '0 1.25rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '10px' }}>
+                      <span style={{ color: '#34d399', fontWeight: 700 }}>AI Safety Score: {don.aiSafetyScore}%</span>
+                      <span style={{ color: 'var(--text-dim)' }}>View Details →</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -858,8 +1144,12 @@ const ReceiverPortal = () => {
               <div style={{ background: '#f8fafc', borderRadius: 14, padding: '1.25rem', marginBottom: '1.25rem', border: '1px solid #e2e8f0' }}>
                 <p style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 1rem' }}>Donor Information</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, #064e3b, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <UserCircle size={32} color="white" />
+                  <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, #064e3b, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                    {selectedRequest.donorId?.profilePic ? (
+                      <img src={selectedRequest.donorId.profilePic} alt={selectedRequest.donorId.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <UserCircle size={32} color="white" />
+                    )}
                   </div>
                   <div style={{ flex: 1 }}>
                     <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#0f172a' }}>{selectedRequest.donorId?.name || 'Anonymous Donor'}</h3>
@@ -872,6 +1162,9 @@ const ReceiverPortal = () => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#374151', fontSize: '0.9rem' }}>
                     <Phone size={16} color="#10b981" /> {selectedRequest.donorId?.phone || 'Not provided'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#374151', fontSize: '0.9rem', gridColumn: 'span 2' }}>
+                    <MapPin size={16} color="#10b981" /> <span><strong>Address:</strong> {selectedRequest.donorId?.location?.address || selectedRequest.donorId?.city || 'Not provided'}</span>
                   </div>
                 </div>
               </div>
@@ -923,95 +1216,39 @@ const ReceiverPortal = () => {
               </div>
 
               {/* Actions */}
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                  className="btn btn-outline"
-                  style={{ flex: 1, padding: '0.9rem', borderColor: '#ef4444', color: '#ef4444', fontSize: '0.95rem', fontWeight: 700 }}
-                  onClick={() => handleRejectRequest(selectedRequest._id)}
-                >
-                  ✗ Reject Donation
-                </button>
-                <button
-                  className="btn btn-primary"
-                  style={{ flex: 1, padding: '0.9rem', fontSize: '0.95rem', fontWeight: 700 }}
-                  onClick={() => handleAcceptRequest(selectedRequest._id, {
-                    donorName: selectedRequest.donorId?.name,
-                    donorPhone: selectedRequest.donorId?.phone || 'Not provided',
-                    donorEmail: selectedRequest.donorId?.email || 'Not provided'
-                  })}
-                >
-                  ✓ Accept & Get Contact
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============ COMPLETED DONATIONS TAB CONTENT ============ */}
-      {activeTab === 'completed' && (
-        <div className="animate-fade-in" style={{ padding: '0.5rem 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-            <h2 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 800 }}>Completed Donations</h2>
-            <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', borderRadius: 99, padding: '4px 14px', fontSize: '0.8rem', fontWeight: 800, border: '1px solid rgba(16,185,129,0.25)' }}>
-              ✅ {completedDonations.length} received
-            </span>
-          </div>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-            All donations your organization has accepted — click any card to view full details, donor info, and AI safety report.
-          </p>
-
-          {completedDonations.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 20, border: '1px dashed rgba(255,255,255,0.1)' }}>
-              <CheckCircle2 size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem', display: 'block' }} />
-              <h3 style={{ color: 'var(--text-dim)', marginBottom: '0.5rem' }}>No Completed Donations Yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>When you accept donation requests, they'll be stored here with all details.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-              {completedDonations.map(don => (
-                <div key={don._id}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)',
-                    borderRadius: '20px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.25s',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-                  }}
-                  onClick={() => setSelectedCompletedDonation(don)}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                >
-                  <div style={{ background: 'linear-gradient(135deg, #022c22 0%, #064e3b 100%)', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#6ee7b7', fontSize: '0.75rem', fontWeight: 800 }}>✅ RECEIVED</span>
-                    <span style={{ color: '#a7f3d0', fontSize: '0.72rem' }}>
-                      {new Date(don.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  <div style={{ padding: '1.25rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    {don.imageUrl ? (
-                      <img src={don.imageUrl} alt="Donation" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }} onError={e => e.target.style.display = 'none'} />
-                    ) : (
-                      <div style={{ width: 64, height: 64, borderRadius: '12px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <CheckCircle2 size={24} color="#10b981" />
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{don.title}</h3>
-                      <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Category: <strong style={{ color: '#10b981' }}>{don.category || 'General'}</strong></p>
-                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>By {don.donorId?.name || 'Anonymous'}</p>
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '0 1.25rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '10px' }}>
-                    <span style={{ color: '#34d399', fontWeight: 700 }}>AI Safety Score: {don.aiSafetyScore}%</span>
-                    <span style={{ color: 'var(--text-dim)' }}>View Details →</span>
-                  </div>
+              {selectedRequest.status === 'completed' ? (
+                <div style={{ flex: 1, color: '#ef4444', fontSize: '1rem', fontWeight: 'bold', padding: '1rem', textAlign: 'center', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                  Donation already accepted by another receiver.
                 </div>
-              ))}
+              ) : (
+                <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+                  <button
+                    className="btn btn-outline"
+                    style={{ flex: 1, padding: '0.9rem', borderColor: '#ef4444', color: '#ef4444', fontSize: '0.95rem', fontWeight: 700 }}
+                    onClick={() => handleRejectRequest(selectedRequest._id)}
+                  >
+                    ✗ Reject Donation
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, padding: '0.9rem', fontSize: '0.95rem', fontWeight: 700 }}
+                    onClick={() => handleAcceptRequest(selectedRequest._id, {
+                      donorName: selectedRequest.donorId?.name,
+                      donorPhone: selectedRequest.donorId?.phone || 'Not provided',
+                      donorEmail: selectedRequest.donorId?.email || 'Not provided',
+                      donorPic: selectedRequest.donorId?.profilePic
+                    })}
+                  >
+                    ✓ Accept & Get Contact
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
+
+
 
       {/* Donor Contact Popup (Shown after Accept) */}
       {acceptedDonor && (
@@ -1028,7 +1265,11 @@ const ReceiverPortal = () => {
 
             <div className="donor-info-card">
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid #e2e8f0' }}>
-                <UserCircle size={48} className="text-primary" />
+                {acceptedDonor.donorPic ? (
+                  <img src={acceptedDonor.donorPic} alt={acceptedDonor.donorName} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <UserCircle size={48} className="text-primary" />
+                )}
                 <div>
                   <h3 style={{ margin: 0 }}>{acceptedDonor.donorName}</h3>
                   <p style={{ margin: 0, fontSize: '0.85rem', color: '#10b981' }}><ShieldCheck size={14} /> Verified Donor</p>
@@ -1072,6 +1313,22 @@ const ReceiverPortal = () => {
                   onChange={(e) => setNewPostTitle(e.target.value)}
                   placeholder="e.g. Need 50 Blankets"
                   className="custom-input"
+                  required
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Category</label>
+                <CustomDropdown
+                  value={newPostCategory}
+                  onChange={setNewPostCategory}
+                  options={[
+                    { value: 'Food', label: 'Food' },
+                    { value: 'Medicine', label: 'Medicine' },
+                    { value: 'Clothes', label: 'Clothes' },
+                    { value: 'Grocery', label: 'Grocery' },
+                    { value: 'Household', label: 'Household' }
+                  ]}
+                  placeholder="Select category..."
                   required
                 />
               </div>
@@ -1145,8 +1402,12 @@ const ReceiverPortal = () => {
               <button className="close-modal" onClick={() => setSelectedDonor(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 2 }}>
-                <div style={{ width: 64, height: 64, borderRadius: '16px', background: 'rgba(255,255,255,0.12)', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserCircle size={44} color="#fff" />
+                <div style={{ width: 64, height: 64, borderRadius: '16px', background: 'rgba(255,255,255,0.12)', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {selectedDonor.profilePic ? (
+                    <img src={selectedDonor.profilePic} alt={selectedDonor.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <UserCircle size={44} color="#fff" />
+                  )}
                 </div>
                 <div>
                   <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: 'white', fontFamily: 'var(--font-heading)' }}>{selectedDonor.name}</h2>
@@ -1231,8 +1492,12 @@ const ReceiverPortal = () => {
                 <h3 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Donor Contact Details</h3>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #1e40af, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <UserCircle size={24} color="white" />
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #1e40af, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {selectedCompletedDonation.donorId?.profilePic ? (
+                      <img src={selectedCompletedDonation.donorId.profilePic} alt={selectedCompletedDonation.donorId.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <UserCircle size={24} color="white" />
+                    )}
                   </div>
                   <div>
                     <h4 style={{ margin: 0, color: 'white', fontSize: '0.95rem', fontWeight: 700 }}>{selectedCompletedDonation.donorId?.name || 'Anonymous Donor'}</h4>

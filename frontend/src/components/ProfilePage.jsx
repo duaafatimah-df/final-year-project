@@ -9,10 +9,10 @@ import './ProfilePage.css';
 
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
-  : 'https://spareshare-ai.up.railway.app';
+  : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
 
 const ProfilePage = ({ onClose }) => {
-  const { user, login } = useAuth();
+  const { user, updateUser } = useAuth();
   const fileRef = useRef(null);
 
   const [editing, setEditing] = useState(false);
@@ -24,6 +24,9 @@ const ProfilePage = ({ onClose }) => {
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
   const [profilePic, setProfilePic] = useState('');
+  const [address, setAddress] = useState('');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
 
   // Load from DB on mount
   useEffect(() => {
@@ -38,6 +41,9 @@ const ProfilePage = ({ onClose }) => {
         setBio(u.bio || '');
         setCity(u.city || '');
         setProfilePic(u.profilePic || '');
+        setAddress(u.location?.address || '');
+        setLat(u.location?.lat || '');
+        setLng(u.location?.lng || '');
       } catch (err) {
         console.error('Failed to load profile', err);
       }
@@ -57,12 +63,11 @@ const ProfilePage = ({ onClose }) => {
     setSaving(true);
     try {
       const res = await axios.put(`${API}/api/users/me`,
-        { name, phone, bio, city, profilePic },
+        { name, phone, bio, city, profilePic, address, lat, lng },
         { headers: { 'x-auth-token': localStorage.getItem('token') } }
       );
-      // Update localStorage user
-      const updatedUser = { ...user, name: res.data.name, phone: res.data.phone };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      // Update global context & local storage user details
+      updateUser(res.data);
       setSaveMsg('✅ Profile saved!');
       setEditing(false);
       setTimeout(() => setSaveMsg(''), 3000);
@@ -193,6 +198,59 @@ const ProfilePage = ({ onClose }) => {
                   <p className="pp-value">{city || '—'}</p>
                 )}
               </div>
+
+              <div className="pp-field" style={{ gridColumn: 'span 2' }}>
+                <label><MapPin size={14} /> Full Street Address</label>
+                {editing ? (
+                  <input value={address} onChange={e => setAddress(e.target.value)} className="pp-input" placeholder="e.g. House 123, Street 4, Gul Colony" />
+                ) : (
+                  <p className="pp-value">{address || '—'}</p>
+                )}
+              </div>
+
+              <div className="pp-field">
+                <label><MapPin size={14} /> Latitude</label>
+                {editing ? (
+                  <input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="pp-input" placeholder="Latitude" />
+                ) : (
+                  <p className="pp-value">{lat || '—'}</p>
+                )}
+              </div>
+
+              <div className="pp-field">
+                <label><MapPin size={14} /> Longitude</label>
+                {editing ? (
+                  <input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="pp-input" placeholder="Longitude" />
+                ) : (
+                  <p className="pp-value">{lng || '—'}</p>
+                )}
+              </div>
+
+              {editing && (
+                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '10px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: '0.8rem', padding: '8px 14px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)', color: 'white', cursor: 'pointer' }}
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          pos => {
+                            setLat(pos.coords.latitude);
+                            setLng(pos.coords.longitude);
+                            alert("Coordinates detected: " + pos.coords.latitude + ", " + pos.coords.longitude);
+                          },
+                          err => alert("Error detecting location coordinates. Try manually.")
+                        );
+                      } else {
+                        alert("Geolocation not supported.");
+                      }
+                    }}
+                  >
+                    📍 Detect Current Coordinates
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="pp-section-title" style={{ marginTop: '1.5rem' }}>

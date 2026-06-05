@@ -13,4 +13,6 @@ const ReportSchema = new mongoose.Schema({
   adminNote:  { type: String, default: '' }
 }, { timestamps: true });
 
+ReportSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Report', ReportSchema);

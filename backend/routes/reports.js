@@ -57,12 +57,20 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Not authorized' });
     const reports = await Report.find()
-      .populate('donationId', 'title category status')
+      .populate({
+        path: 'donationId',
+        select: 'title category status donorId',
+        populate: {
+          path: 'donorId',
+          select: 'name email'
+        }
+      })
       .populate('reporterId', 'name email')
       .sort({ createdAt: -1 })
       .limit(100);
     res.json(reports);
   } catch (err) {
+    console.error('All Reports Error:', err);
     res.status(500).json({ error: 'Server Error' });
   }
 });

@@ -7,7 +7,7 @@ import './MapPage.css';
 
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
-  : 'https://spareshare-ai.up.railway.app';
+  : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const CATEGORY_ICONS_EMOJI = { Food: '🍛', Medicine: '💊', Clothes: '👕', Grocery: '🛒' };

@@ -18,7 +18,7 @@ const Navbar = () => {
 
         <div className="nav-links">
           <Link to="/" className="nav-link">{t('Explore', 'تلاش کریں')}</Link>
-          <a href="/#about" className="nav-link">{t('About', 'ہمارے بارے میں')}</a>
+          <Link to="/about" className="nav-link">{t('About', 'ہمارے بارے میں')}</Link>
           <Link to="/zakat" className="nav-link text-green-accent">{t('Zakat Calculator', 'زکوٰۃ کیلکولیٹر')}</Link>
         </div>
 

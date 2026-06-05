@@ -13,4 +13,8 @@ const RequestSchema = new mongoose.Schema({
   notificationSent: { type: Boolean, default: false }
 }, { timestamps: true });
 
+RequestSchema.index({ createdAt: -1 });
+RequestSchema.index({ receiverId: 1, createdAt: -1 });
+RequestSchema.index({ donationId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Request', RequestSchema);

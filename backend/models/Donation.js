@@ -6,7 +6,7 @@ const DonationSchema = new mongoose.Schema({
 
   // Item details
   title: { type: String, required: true },
-  category: { type: String, enum: ['Food', 'Medicine', 'Clothes', 'Grocery', 'Household'], required: true },
+  category: { type: String, enum: ['Food', 'Medicine', 'Clothes', 'Grocery', 'Household', 'Meat', 'Vegetables', 'Fruit', 'Dairy', 'Other'], required: true },
   itemType: { type: String, required: true },
   condition: { type: String, enum: ['New', 'Good', 'Used'] },
   imageUrl: { type: String, required: true },
@@ -63,5 +63,10 @@ const DonationSchema = new mongoose.Schema({
 
 // 2dsphere index for geospatial queries
 DonationSchema.index({ 'location.lat': 1, 'location.lng': 1 });
+DonationSchema.index({ createdAt: -1 });
+DonationSchema.index({ updatedAt: -1 });
+DonationSchema.index({ donorId: 1, createdAt: -1 });
+DonationSchema.index({ receiverId: 1, createdAt: -1 });
+DonationSchema.index({ receiverId: 1, updatedAt: -1 });
 
 module.exports = mongoose.model('Donation', DonationSchema);

@@ -3,19 +3,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const MONGO_URI = process.env.MONGO_URI;
-
-const UserSchema = new mongoose.Schema({
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
-  phone: String,
-  role: String,
-  isVerified: Boolean,
-  taxId: String,
-  orgType: String,
-}, { timestamps: true });
-
-const User = mongoose.model('User', UserSchema);
+const User = require('./models/User');
 
 const ADMIN_EMAIL    = 'admin@spareshare.com';
 const ADMIN_PASSWORD = 'Admin@1234';
@@ -28,15 +16,13 @@ async function createAdmin() {
 
     const existing = await User.findOne({ email: ADMIN_EMAIL });
     if (existing) {
-      // if already exists but not admin, upgrade it
-      if (existing.role !== 'admin') {
-        existing.role = 'admin';
-        existing.isVerified = true;
-        await existing.save();
-        console.log('✅ Existing account upgraded to Admin role!');
-      } else {
-        console.log('ℹ️  Admin account already exists. No changes made.');
-      }
+      // if already exists but not admin or missing verification, update it
+      existing.role = 'admin';
+      existing.isVerified = true;
+      existing.isEmailVerified = true;
+      existing.approvalStatus = 'approved';
+      await existing.save();
+      console.log('✅ Admin account updated / verified successfully!');
     } else {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, salt);
@@ -48,6 +34,8 @@ async function createAdmin() {
         phone: '03000000000',
         role: 'admin',
         isVerified: true,
+        isEmailVerified: true,
+        approvalStatus: 'approved'
       });
       console.log('✅ Admin account created successfully!');
     }

@@ -259,12 +259,17 @@
   background: linear-gradient(to top, rgba(26,34,54,0.95), transparent);
 }
 .org-type-badge {
-  position: absolute; top: 10px; left: 10px;
-  background: rgba(16,185,129,0.15);
-  border: 1px solid rgba(16,185,129,0.3);
-  color: #10b981;
-  padding: 3px 10px; border-radius: 99px;
-  font-size: 0.7rem; font-weight: 700; z-index: 1;
+  position: absolute; top: 12px; left: 12px;
+  background: rgba(6, 78, 59, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #a7f3d0;
+  padding: 4px 12px; border-radius: 99px;
+  font-size: 0.75rem; font-weight: 800; z-index: 2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .org-card-content {
   padding: 1rem;

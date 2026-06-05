@@ -12,15 +12,17 @@ import {
 } from 'lucide-react';
 import './AdminPortal.css';
 
-const API = import.meta.env.VITE_API_URL;
-const weeklyData = [
-  { name: 'Mon', donations: 40, requests: 24 },
-  { name: 'Tue', donations: 30, requests: 13 },
-  { name: 'Wed', donations: 20, requests: 38 },
-  { name: 'Thu', donations: 27, requests: 39 },
-  { name: 'Fri', donations: 18, requests: 48 },
-  { name: 'Sat', donations: 23, requests: 38 },
-  { name: 'Sun', donations: 34, requests: 43 },
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000'
+  : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
+const defaultWeeklyData = [
+  { name: 'Mon', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
+  { name: 'Tue', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
+  { name: 'Wed', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
+  { name: 'Thu', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
+  { name: 'Fri', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
+  { name: 'Sat', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
+  { name: 'Sun', registrations: 0, donations: 0, approvals: 0, requests: 0, receiverActivity: 0, claims: 0 },
 ];
 
 const AdminPortal = () => {
@@ -36,7 +38,13 @@ const AdminPortal = () => {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const h = { headers: { 'x-auth-token': token } };
+  const [stats, setStats] = useState({ totalUsers: 0, verifiedNGOs: 0, pendingNGOs: 0, activeReports: 0 });
+  const [weeklyData, setWeeklyData] = useState(defaultWeeklyData);
+  const [userFilter, setUserFilter] = useState('all');
+  const [donationFilter, setDonationFilter] = useState('active');
+  const [expandedUserId, setExpandedUserId] = useState(null);
+
+  const getH = () => ({ headers: { 'x-auth-token': localStorage.getItem('token') } });
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -46,16 +54,20 @@ const AdminPortal = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [pend, users, dons, reps] = await Promise.all([
-        axios.get(`${API}/api/users/pending`, h),
-        axios.get(`${API}/api/users/all`, h),
-        axios.get(`${API}/api/donations/all`, h),
-        axios.get(`${API}/api/reports`, h),
+      const config = getH();
+      const [pend, users, dons, reps, statsRes] = await Promise.all([
+        axios.get(`${API}/api/users/pending`, config),
+        axios.get(`${API}/api/users/all`, config),
+        axios.get(`${API}/api/donations/all`, config),
+        axios.get(`${API}/api/reports`, config),
+        axios.get(`${API}/api/users/admin-stats`, config),
       ]);
       setPendingNGOs(pend.data);
       setAllUsers(users.data);
       setAllDonations(dons.data);
       setAllReports(reps.data);
+      setStats(statsRes.data.stats);
+      setWeeklyData(statsRes.data.weeklyData || defaultWeeklyData);
     } catch { showToast('Failed to load data.', 'error'); }
     finally { setLoading(false); }
   };
@@ -64,15 +76,25 @@ const AdminPortal = () => {
 
   const handleApprove = async (id, name) => {
     try {
-      await axios.put(`${API}/api/users/${id}/verify`, {}, h);
-      showToast(`✅ ${name} verified!`);
+      await axios.put(`${API}/api/users/${id}/verify`, {}, getH());
+      showToast(`✅ ${name} verified & approved!`);
       fetchAll();
     } catch { showToast('Failed to verify.', 'error'); }
   };
 
+  const handleReject = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to reject ${name}'s registration request?`)) return;
+    try {
+      await axios.put(`${API}/api/users/${id}/reject`, {}, getH());
+      showToast(`❌ ${name}'s request rejected.`);
+      fetchAll();
+    } catch { showToast('Failed to reject receiver.', 'error'); }
+  };
+
+
   const handleBlock = async (id, isBlocked) => {
     try {
-      await axios.put(`${API}/api/users/${id}/${isBlocked ? 'unblock' : 'block'}`, {}, h);
+      await axios.put(`${API}/api/users/${id}/${isBlocked ? 'unblock' : 'block'}`, {}, getH());
       showToast(isBlocked ? '✅ User unblocked' : '🚫 User blocked');
       fetchAll();
     } catch { showToast('Action failed.', 'error'); }
@@ -81,7 +103,7 @@ const AdminPortal = () => {
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Delete this user? This cannot be undone.')) return;
     try {
-      await axios.delete(`${API}/api/users/${id}`, h);
+      await axios.delete(`${API}/api/users/${id}`, getH());
       showToast('🗑️ User deleted');
       fetchAll();
     } catch { showToast('Delete failed.', 'error'); }
@@ -89,7 +111,7 @@ const AdminPortal = () => {
 
   const handleExpireDonation = async (id) => {
     try {
-      await axios.put(`${API}/api/donations/${id}/expire`, {}, h);
+      await axios.put(`${API}/api/donations/${id}/expire`, {}, getH());
       showToast('⏰ Donation expired');
       fetchAll();
     } catch { showToast('Failed.', 'error'); }
@@ -98,7 +120,7 @@ const AdminPortal = () => {
   const handleDeleteDonation = async (id) => {
     if (!window.confirm('Delete this donation?')) return;
     try {
-      await axios.delete(`${API}/api/donations/${id}`, h);
+      await axios.delete(`${API}/api/donations/${id}`, getH());
       showToast('🗑️ Donation deleted');
       fetchAll();
     } catch { showToast('Delete failed.', 'error'); }
@@ -106,7 +128,7 @@ const AdminPortal = () => {
 
   const handleReviewReport = async (id, status) => {
     try {
-      await axios.put(`${API}/api/reports/${id}/review`, { status }, h);
+      await axios.put(`${API}/api/reports/${id}/review`, { status }, getH());
       showToast('Report updated');
       fetchAll();
     } catch { showToast('Failed.', 'error'); }
@@ -116,11 +138,31 @@ const AdminPortal = () => {
 
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', Icon: TrendingUp },
-    { id: 'users', label: 'All Users', Icon: Users, count: allUsers.length },
-    { id: 'pending', label: 'Pending NGOs', Icon: Clock, count: pendingNGOs.length },
+    { id: 'users', label: 'All Users', Icon: Users, count: stats.totalUsers },
+    { id: 'pending', label: 'Pending NGOs', Icon: Clock, count: stats.pendingNGOs },
     { id: 'donations', label: 'Donations', Icon: Package, count: allDonations.length },
-    { id: 'reports', label: 'Reports', Icon: Flag, count: allReports.filter(r => r.status === 'pending').length },
+    { id: 'reports', label: 'Reports', Icon: Flag, count: stats.activeReports },
   ];
+
+  const filteredUsers = allUsers.filter(u => {
+    if (userFilter === 'all') return true;
+    if (userFilter === 'donor') return u.role === 'donor';
+    if (userFilter === 'receiver') return u.role === 'receiver';
+    if (userFilter === 'approved_ngo') return u.role === 'receiver' && u.isVerified && u.approvalStatus === 'approved';
+    if (userFilter === 'pending_ngo') return u.role === 'receiver' && u.approvalStatus === 'pending';
+    if (userFilter === 'rejected_ngo') return u.role === 'receiver' && u.approvalStatus === 'rejected';
+    return true;
+  });
+
+  const filteredDonations = allDonations.filter(d => {
+    const isExpired = d.isExpired || d.status === 'expired' || (d.expiryTime && new Date(d.expiryTime) < new Date());
+    if (donationFilter === 'active') return d.status === 'active' && !isExpired && (d.reportCount || 0) === 0;
+    if (donationFilter === 'completed') return d.status === 'completed';
+    if (donationFilter === 'claimed') return d.status === 'pending_receiver' || d.claimedBy || d.receiverId;
+    if (donationFilter === 'expired') return isExpired;
+    if (donationFilter === 'flagged') return d.reportCount > 0 || d.status === 'needs_review';
+    return true;
+  });
 
   return (
     <div className="admin-layout">
@@ -164,10 +206,10 @@ const AdminPortal = () => {
             </div>
             <div className="admin-stats-grid">
               {[
-                { label: 'Total Users', value: allUsers.length, color: 'stat-blue', Icon: Users },
-                { label: 'Verified NGOs', value: allUsers.filter(u => u.role === 'receiver' && u.isVerified).length, color: 'stat-green', Icon: ShieldCheck },
-                { label: 'Pending NGOs', value: pendingNGOs.length, color: 'stat-yellow', Icon: Clock },
-                { label: 'Active Reports', value: allReports.filter(r => r.status === 'pending').length, color: 'stat-red', Icon: AlertTriangle },
+                { label: 'Total Users', value: stats.totalUsers, color: 'stat-blue', Icon: Users },
+                { label: 'Verified NGOs', value: stats.verifiedNGOs, color: 'stat-green', Icon: ShieldCheck },
+                { label: 'Pending NGOs', value: stats.pendingNGOs, color: 'stat-yellow', Icon: Clock },
+                { label: 'Active Reports', value: stats.activeReports, color: 'stat-red', Icon: AlertTriangle },
               ].map(({ label, value, color, Icon }) => (
                 <div key={label} className={`admin-stat-card ${color}`}>
                   <div className="stat-icon-wrap"><Icon size={24} /></div>
@@ -184,8 +226,9 @@ const AdminPortal = () => {
                     <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
                     <YAxis stroke="#94a3b8" fontSize={12} />
                     <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 10 }} />
+                    <Bar dataKey="registrations" fill="#f59e0b" radius={[6, 6, 0, 0]} name="Registrations" />
                     <Bar dataKey="donations" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Donations" />
-                    <Bar dataKey="requests" fill="#10b981" radius={[6, 6, 0, 0]} name="Requests" />
+                    <Bar dataKey="approvals" fill="#10b981" radius={[6, 6, 0, 0]} name="NGO Approvals" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -197,7 +240,9 @@ const AdminPortal = () => {
                     <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
                     <YAxis stroke="#94a3b8" fontSize={12} />
                     <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 10 }} />
-                    <Area type="monotone" dataKey="requests" stroke="#10b981" fill="#10b981" fillOpacity={0.15} strokeWidth={3} />
+                    <Area type="monotone" dataKey="requests" stroke="#10b981" fill="#10b981" fillOpacity={0.1} strokeWidth={2.5} name="Requests" />
+                    <Area type="monotone" dataKey="receiverActivity" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={2.5} name="Receiver Activity" />
+                    <Area type="monotone" dataKey="claims" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2.5} name="Claims" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -216,46 +261,104 @@ const AdminPortal = () => {
         {activeTab === 'users' && (
           <div className="admin-content animate-fade-in">
             <div className="admin-page-header">
-              <div><h1>All Users</h1><p>Manage all registered users — block, unblock or delete.</p></div>
+              <div><h1>All Users</h1><p>Manage all registered users block, unblock or delete.</p></div>
               <button className="admin-refresh-btn" onClick={fetchAll} disabled={loading}><RefreshCw size={16} /> Refresh</button>
             </div>
+            
+            <div className="admin-filter-bar">
+              {[
+                { id: 'all', label: 'All Users' },
+                { id: 'donor', label: 'Donors' },
+                { id: 'receiver', label: 'Receivers' },
+                { id: 'approved_ngo', label: 'Approved NGOs' },
+                { id: 'pending_ngo', label: 'Pending NGOs' },
+                { id: 'rejected_ngo', label: 'Rejected NGOs' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  className={`admin-filter-btn ${userFilter === f.id ? 'active' : ''}`}
+                  onClick={() => setUserFilter(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             <div className="admin-verified-table-wrap">
               <table className="admin-table">
-                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Email Status</th><th>Approval Status</th><th>Joined</th><th>Actions</th></tr></thead>
                 <tbody>
-                  {allUsers.map(u => (
-                    <tr key={u._id} style={{ opacity: u.isBlocked ? 0.6 : 1 }}>
-                      <td><div className="table-org-name"><UserCircle size={18} /><strong>{u.name}</strong></div></td>
-                      <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>{u.email}</td>
-                      <td><span className="org-type-pill" style={{ background: `${roleColor(u.role)}22`, color: roleColor(u.role) }}>{u.role}</span></td>
-                      <td>
-                        {u.isBlocked
-                          ? <span className="pending-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>🚫 Blocked</span>
-                          : u.isVerified
+                  {filteredUsers.map(u => (
+                    <>
+                      <tr key={u._id} onClick={() => setExpandedUserId(expandedUserId === u._id ? null : u._id)} style={{ cursor: 'pointer', opacity: u.isBlocked ? 0.6 : 1 }}>
+                        <td><div className="table-org-name"><UserCircle size={18} /><strong>{u.name}</strong></div></td>
+                        <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>{u.email}</td>
+                        <td><span className="org-type-pill" style={{ background: `${roleColor(u.role)}22`, color: roleColor(u.role) }}>{u.role}</span></td>
+                        <td>
+                          {u.isEmailVerified
                             ? <span className="verified-badge"><ShieldCheck size={12} /> Verified</span>
-                            : <span className="pending-badge"><Clock size={12} /> Pending</span>}
-                      </td>
-                      <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{new Date(u.createdAt).toLocaleDateString()}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          {u.role !== 'admin' && (
-                            <button className={u.isBlocked ? 'btn-approve' : 'btn-reject'} style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleBlock(u._id, u.isBlocked)}>
-                              {u.isBlocked ? '✅ Unblock' : <><Ban size={13} /> Block</>}
-                            </button>
-                          )}
-                          {!u.isVerified && u.role === 'receiver' && (
-                            <button className="btn-approve" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleApprove(u._id, u.name)}>
-                              <ShieldCheck size={13} /> Verify
-                            </button>
-                          )}
-                          {u.role !== 'admin' && (
-                            <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleDeleteUser(u._id)}>
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                            : <span className="pending-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', borderColor: 'rgba(239,68,68,0.2)' }}><XCircle size={12} /> Unverified</span>}
+                        </td>
+                        <td>
+                          {u.isBlocked
+                            ? <span className="pending-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', borderColor: 'rgba(239,68,68,0.2)' }}>🚫 Blocked</span>
+                            : u.role === 'receiver'
+                              ? (
+                                  u.approvalStatus === 'approved'
+                                    ? <span className="verified-badge"><ShieldCheck size={12} /> Approved</span>
+                                    : u.approvalStatus === 'rejected'
+                                      ? <span className="pending-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', borderColor: 'rgba(239,68,68,0.2)' }}><XCircle size={12} /> Rejected</span>
+                                      : <span className="pending-badge"><Clock size={12} /> Pending</span>
+                                )
+                              : <span style={{ color: '#64748b' }}>N/A</span>}
+                        </td>
+                        <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{new Date(u.createdAt).toLocaleDateString()}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
+                            {u.role !== 'admin' && (
+                              <button className={u.isBlocked ? 'btn-approve' : 'btn-reject'} style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleBlock(u._id, u.isBlocked)}>
+                                {u.isBlocked ? '✅ Unblock' : <><Ban size={13} /> Block</>}
+                              </button>
+                            )}
+                            {!u.isVerified && u.role === 'receiver' && (
+                              <button className="btn-approve" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleApprove(u._id, u.name)}>
+                                <ShieldCheck size={13} /> Verify
+                              </button>
+                            )}
+                            {u.role !== 'admin' && (
+                              <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleDeleteUser(u._id)}>
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedUserId === u._id && (
+                        <tr key={`${u._id}-expanded`}>
+                          <td colSpan="7" style={{ background: 'rgba(255,255,255,0.02)', padding: '1.25rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', fontSize: '0.85rem' }}>
+                              <div>
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>User ID:</strong> {u._id}</p>
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Name:</strong> {u.name}</p>
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Email:</strong> {u.email}</p>
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Phone:</strong> {u.phone || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Role:</strong> {u.role}</p>
+                                {u.role === 'receiver' && (
+                                  <>
+                                    <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Org Type:</strong> {u.orgType || 'N/A'}</p>
+                                    <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Tax ID:</strong> {u.taxId || 'N/A'}</p>
+                                  </>
+                                )}
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Flag Count:</strong> {u.flagCount || 0}</p>
+                                <p style={{ margin: '4px 0' }}><strong style={{ color: '#94a3b8' }}>Joined:</strong> {new Date(u.createdAt).toLocaleString()}</p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>
@@ -288,7 +391,7 @@ const AdminPortal = () => {
                     </div>
                     <div className="admin-org-actions">
                       <button className="btn-approve" onClick={() => handleApprove(org._id, org.name)}><ShieldCheck size={16} /> Approve</button>
-                      <button className="btn-reject" onClick={() => handleBlock(org._id, false)}><XCircle size={16} /> Reject</button>
+                      <button className="btn-reject" onClick={() => handleReject(org._id, org.name)}><XCircle size={16} /> Reject</button>
                     </div>
                   </div>
                 ))}
@@ -301,40 +404,70 @@ const AdminPortal = () => {
         {activeTab === 'donations' && (
           <div className="admin-content animate-fade-in">
             <div className="admin-page-header">
-              <div><h1>All Donations</h1><p>Manage all platform donations — expire or delete.</p></div>
+              <div><h1>All Donations</h1><p>Manage all platform donations expire or delete.</p></div>
               <button className="admin-refresh-btn" onClick={fetchAll}><RefreshCw size={16} /> Refresh</button>
             </div>
+
+            <div className="admin-filter-bar">
+              {[
+                { id: 'active', label: 'Active Donations' },
+                { id: 'claimed', label: 'Claimed Donations' },
+                { id: 'completed', label: 'Completed Donations' },
+                { id: 'expired', label: 'Expired Donations' },
+                { id: 'flagged', label: 'Flagged Donations' }
+              ].map(t => (
+                <button
+                  key={t.id}
+                  className={`admin-filter-btn ${donationFilter === t.id ? 'active' : ''}`}
+                  onClick={() => setDonationFilter(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             <div className="admin-verified-table-wrap">
               <table className="admin-table">
-                <thead><tr><th>Title</th><th>Category</th><th>Donor</th><th>Status</th><th>Expiry</th><th>Reports</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Donation Title</th><th>Donor Name</th><th>Category</th><th>Quantity</th><th>Status</th><th>Expiry Information</th><th>Donation Date</th><th>Reports</th><th>Actions</th></tr></thead>
                 <tbody>
-                  {allDonations.map(d => (
-                    <tr key={d._id} style={{ opacity: d.isExpired ? 0.5 : 1 }}>
-                      <td><strong style={{ fontSize: '0.88rem' }}>{d.title}</strong></td>
-                      <td><span className="org-type-pill">{d.category}</span></td>
-                      <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>{d.donorId?.name || '—'}</td>
-                      <td>
-                        <span className={`pending-badge ${d.status === 'active' ? '' : ''}`} style={{
-                          background: d.status === 'active' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                          color: d.status === 'active' ? '#10b981' : '#f87171'
-                        }}>{d.status}</span>
-                      </td>
-                      <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{new Date(d.expiryTime).toLocaleDateString()}</td>
-                      <td style={{ color: d.reportCount > 0 ? '#f59e0b' : '#64748b', fontWeight: 700 }}>{d.reportCount || 0}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          {d.status === 'active' && (
-                            <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleExpireDonation(d._id)}>
-                              <Clock size={13} /> Expire
+                  {filteredDonations.map(d => {
+                    const isExpired = d.isExpired || d.status === 'expired' || (d.expiryTime && new Date(d.expiryTime) < new Date());
+                    return (
+                      <tr key={d._id} style={{ opacity: isExpired ? 0.5 : 1 }}>
+                        <td><strong style={{ fontSize: '0.88rem' }}>{d.title}</strong></td>
+                        <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                          <div>{d.donorId?.name || '—'}</div>
+                          {d.donorId?.email && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{d.donorId.email}</div>}
+                        </td>
+                        <td><span className="org-type-pill">{d.category}</span></td>
+                        <td style={{ fontSize: '0.82rem' }}>{d.quantity || '—'}</td>
+                        <td>
+                          <span className="pending-badge" style={{
+                            background: d.status === 'active' && !isExpired ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                            color: d.status === 'active' && !isExpired ? '#10b981' : '#f87171',
+                            borderColor: d.status === 'active' && !isExpired ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'
+                          }}>{isExpired ? 'expired' : d.status}</span>
+                        </td>
+                        <td style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                          {d.expiryTime ? new Date(d.expiryTime).toLocaleString() : 'N/A'}
+                        </td>
+                        <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{new Date(d.createdAt).toLocaleDateString()}</td>
+                        <td style={{ color: d.reportCount > 0 ? '#f59e0b' : '#64748b', fontWeight: 700 }}>{d.reportCount || 0}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            {d.status === 'active' && !isExpired && (
+                              <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleExpireDonation(d._id)}>
+                                <Clock size={13} /> Expire
+                              </button>
+                            )}
+                            <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleDeleteDonation(d._id)}>
+                              <Trash2 size={13} />
                             </button>
-                          )}
-                          <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleDeleteDonation(d._id)}>
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -354,24 +487,42 @@ const AdminPortal = () => {
               <div className="admin-cards-grid">
                 {allReports.map(rep => (
                   <div key={rep._id} className="admin-org-card">
-                    <div className="admin-org-card-header">
+                     <div className="admin-org-card-header">
                       <div className="admin-org-icon" style={{ background: 'rgba(239,68,68,0.1)' }}><Flag size={20} color="#f87171" /></div>
                       <div>
                         <h3 style={{ fontSize: '0.95rem' }}>{rep.reason}</h3>
                         <span className="org-type-pill">Donation: {rep.donationId?.title || '—'}</span>
                       </div>
-                      <span className="pending-badge" style={{ background: rep.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)', color: rep.status === 'pending' ? '#fbbf24' : '#10b981' }}>
+                      <span className="pending-badge" style={{ 
+                        background: rep.status === 'pending' ? 'rgba(245,158,11,0.1)' : rep.status === 'reviewed' ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.1)', 
+                        color: rep.status === 'pending' ? '#fbbf24' : rep.status === 'reviewed' ? '#60a5fa' : '#10b981' 
+                      }}>
                         {rep.status}
                       </span>
                     </div>
                     <div className="admin-org-details">
-                      <div className="org-detail-row"><span className="detail-label">Reporter</span><span>{rep.reporterId?.name || '—'}</span></div>
+                      <div className="org-detail-row"><span className="detail-label">Reporter</span><span>{rep.reporterId?.name || '—'} ({rep.reporterId?.email || '—'})</span></div>
+                      <div className="org-detail-row">
+                        <span className="detail-label">Related User/Donation</span>
+                        <span>
+                          {rep.donationId 
+                            ? `Donation: ${rep.donationId.title} (Donor: ${rep.donationId.donorId?.name || '—'})` 
+                            : '—'}
+                        </span>
+                      </div>
                       <div className="org-detail-row"><span className="detail-label">Details</span><span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>{rep.details || 'No details'}</span></div>
-                      <div className="org-detail-row"><span className="detail-label">Filed</span><span>{new Date(rep.createdAt).toLocaleDateString()}</span></div>
+                      <div className="org-detail-row"><span className="detail-label">Filed</span><span>{new Date(rep.createdAt).toLocaleString()}</span></div>
                     </div>
                     {rep.status === 'pending' && (
                       <div className="admin-org-actions">
-                        <button className="btn-approve" onClick={() => handleReviewReport(rep._id, 'actioned')}><CheckCircle2 size={16} /> Take Action</button>
+                        <button className="btn-approve" style={{ background: 'linear-gradient(135deg, #2563eb, #3b82f6)' }} onClick={() => handleReviewReport(rep._id, 'reviewed')}><Clock size={16} /> Review</button>
+                        <button className="btn-approve" onClick={() => handleReviewReport(rep._id, 'actioned')}><CheckCircle2 size={16} /> Resolve</button>
+                        <button className="btn-reject" onClick={() => handleReviewReport(rep._id, 'dismissed')}><XCircle size={16} /> Dismiss</button>
+                      </div>
+                    )}
+                    {rep.status === 'reviewed' && (
+                      <div className="admin-org-actions">
+                        <button className="btn-approve" onClick={() => handleReviewReport(rep._id, 'actioned')}><CheckCircle2 size={16} /> Resolve</button>
                         <button className="btn-reject" onClick={() => handleReviewReport(rep._id, 'dismissed')}><XCircle size={16} /> Dismiss</button>
                       </div>
                     )}

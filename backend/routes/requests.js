@@ -110,6 +110,7 @@ router.get('/all', authMiddleware, async (req, res) => {
       .limit(100);
     res.json(requests);
   } catch (err) {
+    console.error('All Requests Error:', err);
     res.status(500).json({ error: 'Server Error' });
   }
 });

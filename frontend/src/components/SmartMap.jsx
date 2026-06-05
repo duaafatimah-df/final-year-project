@@ -4,7 +4,7 @@ import { Loader2, AlertCircle, MapPin, CheckCircle } from 'lucide-react';
 
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
-  : 'https://spareshare-ai.up.railway.app';
+  : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 function loadLeaflet() {
@@ -63,7 +63,7 @@ function loadGoogleMaps(apiKey) {
   });
 }
 
-export default function SmartMap({ category, userLat, userLng, aiStatus, onSelectReceiver }) {
+export default function SmartMap({ category, userLat, userLng, aiStatus, onSelectReceiver, receiverList }) {
   const mapRef = useRef(null);
   const googleMapRef = useRef(null);
   const markersRef = useRef([]);
@@ -84,6 +84,11 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
   const isRejected = aiStatus === 'rejected';
 
   useEffect(() => {
+    if (receiverList) {
+      setReceivers(receiverList);
+      setLoading(false);
+      return;
+    }
     const fetchNearby = async () => {
       setLoading(true);
       try {
@@ -102,7 +107,7 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
     if (userLat && userLng) {
       fetchNearby();
     }
-  }, [userLat, userLng, category, isRejected]);
+  }, [userLat, userLng, category, isRejected, receiverList]);
 
   useEffect(() => {
     if (!userLat || !userLng) return;
@@ -178,6 +183,28 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
   useEffect(() => {
     if (!mapLoaded) return;
 
+    // Group receivers by unique receiver ID
+    const uniqueReceiversMap = new Map();
+    receivers.forEach(rec => {
+      const actualPost = rec.post || (rec.title ? rec : null);
+      const userObj = rec.ngo || rec.receiverId || actualPost?.receiverId;
+      const recId = userObj?._id || userObj;
+      if (!recId) return;
+      const recIdStr = recId.toString();
+
+      if (!uniqueReceiversMap.has(recIdStr)) {
+        uniqueReceiversMap.set(recIdStr, {
+          receiverId: userObj,
+          distanceKm: rec.distanceKm,
+          travelTimeMin: rec.travelTimeMin,
+          location: userObj?.location || rec.location || {},
+          posts: []
+        });
+      }
+      uniqueReceiversMap.get(recIdStr).posts.push(actualPost || rec);
+    });
+    const uniqueReceiversList = Array.from(uniqueReceiversMap.values());
+
     if (useLeaflet && window.L && leafletMapRef.current) {
       const L = window.L;
       const map = leafletMapRef.current;
@@ -192,12 +219,17 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         fillOpacity: 1,
         color: 'white',
         weight: 2
-      }).addTo(map).bindPopup('You are here');
+      }).addTo(map).bindPopup('You are here (Donor Location)');
       leafletMarkersRef.current.push(userMarker);
 
-      receivers.forEach(rec => {
-        const rLat = rec.receiverId?.location?.lat || userLat + (Math.random() - 0.5) * 0.05;
-        const rLng = rec.receiverId?.location?.lng || userLng + (Math.random() - 0.5) * 0.05;
+      // Create LatLngBounds
+      const bounds = L.latLngBounds([userLat, userLng]);
+
+      uniqueReceiversList.forEach(item => {
+        const rLat = item.location?.lat;
+        const rLng = item.location?.lng;
+        if (!rLat || !rLng) return;
+
         const color = isRejected ? '#9ca3af' : '#10b981';
 
         const marker = L.circleMarker([rLat, rLng], {
@@ -208,23 +240,39 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
           weight: 2
         }).addTo(map);
 
+        bounds.extend([rLat, rLng]);
+
+        const recName = item.receiverId?.name || 'Receiver';
+        const address = item.location?.address || '';
+        const requestsHtml = item.posts.map(p => `<li>"${p.title}"</li>`).join('');
+
         const popupContent = `
-          <div style="font-family:Inter,sans-serif;padding:6px;max-width:180px;color:#0f172a;">
-            <strong style="color:#0f172a;font-size:0.9rem">${rec.title}</strong>
-            <div style="color:#64748b;font-size:0.75rem;margin-top:4px">${rec.receiverId?.name || 'NGO'}</div>
-            <div style="color:#64748b;font-size:0.75rem;margin-top:4px">📍 ${rec.distanceKm} km away</div>
-            ${isRejected ? '<div style="color:#ef4444;font-size:0.75rem;margin-top:4px">❌ Item Rejected - Cannot donate</div>' : ''}
+          <div style="font-family:Inter,sans-serif;padding:6px;max-width:200px;color:#0f172a;">
+            <strong style="color:#0f172a;font-size:0.95rem;display:block;margin-bottom:4px">Receiver: ${recName}</strong>
+            <div style="color:#64748b;font-size:0.75rem;">📍 ${item.distanceKm} km away</div>
+            ${address ? `<div style="color:#64748b;font-size:0.75rem;margin-top:2px;">🏠 Address: ${address}</div>` : ''}
+            <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
+              <div style="font-weight:600;font-size:0.75rem;color:#0f172a;">Requested Items:</div>
+              <ul style="margin:4px 0 0;padding-left:12px;font-size:0.75rem;color:#334155;">
+                ${requestsHtml}
+              </ul>
+            </div>
+            ${isRejected ? '<div style="color:#ef4444;font-size:0.75rem;margin-top:6px;font-weight:600;">❌ Item Rejected - Cannot donate</div>' : ''}
           </div>
         `;
         marker.bindPopup(popupContent);
         marker.on('click', () => {
-          if (!isRejected && onSelectReceiver) {
-            onSelectReceiver(rec);
+          if (!isRejected && onSelectReceiver && item.posts.length > 0) {
+            onSelectReceiver(item.posts[0]);
           }
         });
 
         leafletMarkersRef.current.push(marker);
       });
+
+      if (uniqueReceiversList.length > 0) {
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
 
     } else if (!useLeaflet && googleMapRef.current && window.google?.maps) {
       const maps = window.google.maps;
@@ -232,9 +280,31 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
       markersRef.current.forEach(m => m.setMap(null));
       markersRef.current = [];
 
-      receivers.forEach(rec => {
-        const rLat = rec.receiverId?.location?.lat || userLat + (Math.random() - 0.5) * 0.05;
-        const rLng = rec.receiverId?.location?.lng || userLng + (Math.random() - 0.5) * 0.05;
+      // Add Donor User location marker on Google Map
+      const userMarker = new maps.Marker({
+        position: { lat: userLat, lng: userLng },
+        map: googleMapRef.current,
+        title: 'You are here (Donor Location)',
+        icon: {
+          path: maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#3b82f6', // Blue for donor location
+          fillOpacity: 1,
+          strokeWeight: 2,
+          strokeColor: 'white',
+        }
+      });
+      markersRef.current.push(userMarker);
+
+      // Create LatLngBounds
+      const bounds = new maps.LatLngBounds();
+      bounds.extend({ lat: userLat, lng: userLng });
+
+      uniqueReceiversList.forEach(item => {
+        const rLat = item.location?.lat;
+        const rLng = item.location?.lng;
+        if (!rLat || !rLng) return;
+
         const color = isRejected ? '#9ca3af' : '#10b981';
 
         const marker = new maps.Marker({
@@ -248,20 +318,32 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
             strokeWeight: 2,
             strokeColor: 'white',
           },
-          title: rec.title,
+          title: item.receiverId?.name || 'Receiver',
           opacity: isRejected ? 0.5 : 1,
         });
 
+        bounds.extend({ lat: rLat, lng: rLng });
+
         marker.addListener('click', () => {
-          if (!isRejected && onSelectReceiver) {
-            onSelectReceiver(rec);
+          if (!isRejected && onSelectReceiver && item.posts.length > 0) {
+            onSelectReceiver(item.posts[0]);
           }
+          const recName = item.receiverId?.name || 'Receiver';
+          const address = item.location?.address || '';
+          const requestsHtml = item.posts.map(p => `<li>"${p.title}"</li>`).join('');
+
           infoWindowRef.current.setContent(`
-            <div style="font-family:Inter,sans-serif;padding:6px;max-width:180px;">
-              <strong style="color:#0f172a;font-size:0.9rem">${rec.title}</strong>
-              <div style="color:#64748b;font-size:0.75rem;margin-top:4px">${rec.receiverId?.name || 'NGO'}</div>
-              <div style="color:#64748b;font-size:0.75rem;margin-top:4px">📍 ${rec.distanceKm} km away</div>
-              ${isRejected ? '<div style="color:#ef4444;font-size:0.75rem;margin-top:4px">❌ Item Rejected - Cannot donate</div>' : ''}
+            <div style="font-family:Inter,sans-serif;padding:6px;max-width:200px;color:#0f172a;">
+              <strong style="color:#0f172a;font-size:0.95rem;display:block;margin-bottom:4px">Receiver: ${recName}</strong>
+              <div style="color:#64748b;font-size:0.75rem;">📍 ${item.distanceKm} km away</div>
+              ${address ? `<div style="color:#64748b;font-size:0.75rem;margin-top:2px;">🏠 Address: ${address}</div>` : ''}
+              <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
+                <div style="font-weight:600;font-size:0.75rem;color:#0f172a;">Requested Items:</div>
+                <ul style="margin:4px 0 0;padding-left:12px;font-size:0.75rem;color:#334155;">
+                  ${requestsHtml}
+                </ul>
+              </div>
+              ${isRejected ? '<div style="color:#ef4444;font-size:0.75rem;margin-top:6px;font-weight:600;">❌ Item Rejected - Cannot donate</div>' : ''}
             </div>
           `);
           infoWindowRef.current.open(googleMapRef.current, marker);
@@ -269,8 +351,23 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
 
         markersRef.current.push(marker);
       });
+
+      if (uniqueReceiversList.length > 0) {
+        googleMapRef.current.fitBounds(bounds);
+      }
     }
   }, [receivers, mapLoaded, isRejected, useLeaflet, userLat, userLng, onSelectReceiver]);
+
+  // Helper to count unique receivers for displaying header count
+  const getUniqueReceiverCount = () => {
+    const ids = new Set();
+    receivers.forEach(r => {
+      const id = r.receiverId?._id || r.receiverId;
+      if (id) ids.add(id.toString());
+    });
+    return ids.size;
+  };
+  const uniqueReceiverCount = getUniqueReceiverCount();
 
   return (
     <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginTop: 24 }}>
@@ -278,7 +375,9 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
           <MapPin size={18} color="#3b82f6" /> Smart Donation Map
         </h3>
-        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>{receivers.length} Nearby Matches</span>
+        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
+          {uniqueReceiverCount} suggested receiver{uniqueReceiverCount !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {aiStats && aiStats.temperature > 30 && category === 'Food' && (

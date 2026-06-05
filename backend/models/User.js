@@ -16,6 +16,15 @@ const UserSchema = new mongoose.Schema({
   avgRating:   { type: Number, default: null },
   ratingCount: { type: Number, default: 0 },
 
+  // Email Verification & OTP Security Credentials
+  isEmailVerified:             { type: Boolean, default: false },
+  emailVerificationOtp:        { type: String },
+  emailVerificationOtpExpires: { type: Date },
+  passwordResetOtp:            { type: String },
+  passwordResetOtpExpires:     { type: Date },
+  approvalStatus:              { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved' },
+
+
   // Profile
   bio:           { type: String, default: '' },
   city:          { type: String, default: '' },
@@ -24,6 +33,15 @@ const UserSchema = new mongoose.Schema({
 
   // Notification preference (email-ready)
   emailNotifications: { type: Boolean, default: true },
+
+  // Geospatial Coordinates for distance mapping
+  location: {
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    address: { type: String, default: '' }
+  },
 }, { timestamps: true });
+
+UserSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('User', UserSchema);

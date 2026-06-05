@@ -29,6 +29,27 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+function cleanToStandardCategory(cat) {
+  if (!cat) return 'Food';
+  const lower = cat.toLowerCase();
+  if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
+    return 'Food';
+  }
+  if (lower.includes('med') || lower.includes('health') || lower.includes('pharma') || lower.includes('drug') || lower.includes('syrup') || lower.includes('tablet')) {
+    return 'Medicine';
+  }
+  if (lower.includes('cloth') || lower.includes('garment') || lower.includes('dress') || lower.includes('wear') || lower.includes('shirt') || lower.includes('pant') || lower.includes('shoe')) {
+    return 'Clothes';
+  }
+  if (lower.includes('house') || lower.includes('furniture') || lower.includes('utensil') || lower.includes('appliance') || lower.includes('blanket') || lower.includes('bed') || lower.includes('home')) {
+    return 'Household';
+  }
+  if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
+    return 'Grocery';
+  }
+  return 'Food';
+}
+
 // Create a new demand post
 router.post('/', authMiddleware, async (req, res) => {
   try {
@@ -36,10 +57,15 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Only receivers can create demand posts' });
     }
 
-    const { title, urgency, desc } = req.body;
+    const { title, category, urgency, desc } = req.body;
+    if (!category) return res.status(400).json({ error: 'Category is required' });
+
+    const cleanCategory = cleanToStandardCategory(category);
+
     const post = new Post({
       receiverId: req.user.userId,
       title,
+      category: cleanCategory,
       urgency,
       desc
     });
@@ -127,9 +153,11 @@ router.get('/nearby', async (req, res) => {
 
     posts = posts
       .map(p => {
-        // Assume receivers have a location in their profile if not in post
-        const pLat = p.receiverId?.location?.lat || 24.8607;
-        const pLng = p.receiverId?.location?.lng || 67.0011;
+        const pLat = p.receiverId?.location?.lat;
+        const pLng = p.receiverId?.location?.lng;
+        if (pLat === undefined || pLat === null || pLng === undefined || pLng === null) {
+          return { ...p._doc, distanceKm: 999999 };
+        }
         const dist = haversineKm(uLat, uLng, pLat, pLng);
         return { ...p._doc, distanceKm: Math.round(dist * 10) / 10 };
       })

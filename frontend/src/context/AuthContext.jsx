@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
-  : 'https://spareshare-ai.up.railway.app';
+  : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
 
 const AuthContext = createContext();
 export const LangContext = createContext();
@@ -67,21 +67,77 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true, role: userData.role };
     } catch (err) {
-      return { success: false, error: err.response?.data?.error || 'Login failed' };
+      const errorData = err.response?.data;
+      return { 
+        success: false, 
+        error: errorData?.error || 'Login failed',
+        verificationRequired: errorData?.verificationRequired,
+        approvalStatus: errorData?.approvalStatus,
+        email: errorData?.email
+      };
     }
   };
 
   const register = async (userData) => {
     try {
       const res = await axios.post(`${API}/api/auth/register`, userData);
-      const { token, user: newUser } = res.data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(newUser));
-      axios.defaults.headers.common['x-auth-token'] = token;
-      setUser(newUser);
-      return { success: true, role: newUser.role };
+      return { 
+        success: true, 
+        verificationRequired: res.data.verificationRequired, 
+        message: res.data.message, 
+        email: res.data.email 
+      };
     } catch (err) {
       return { success: false, error: err.response?.data?.error || 'Registration failed' };
+    }
+  };
+
+  const verifyEmail = async (email, otp) => {
+    try {
+      const res = await axios.post(`${API}/api/auth/verify-email`, { email, otp });
+      const { token, user: userData } = res.data;
+      if (token) {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        axios.defaults.headers.common['x-auth-token'] = token;
+        setUser(userData);
+      }
+      return { 
+        success: true, 
+        token, 
+        user: userData, 
+        message: res.data.message, 
+        approvalStatus: res.data.approvalStatus 
+      };
+    } catch (err) {
+      return { success: false, error: err.response?.data?.error || 'Verification failed' };
+    }
+  };
+
+  const forgotPassword = async (email) => {
+    try {
+      const res = await axios.post(`${API}/api/auth/forgot-password`, { email });
+      return { success: true, message: res.data.message };
+    } catch (err) {
+      return { success: false, error: err.response?.data?.error || 'Request failed' };
+    }
+  };
+
+  const resetPassword = async (email, otp, newPassword) => {
+    try {
+      const res = await axios.post(`${API}/api/auth/reset-password`, { email, otp, newPassword });
+      return { success: true, message: res.data.message };
+    } catch (err) {
+      return { success: false, error: err.response?.data?.error || 'Reset failed' };
+    }
+  };
+
+  const resendOtp = async (email, type) => {
+    try {
+      const res = await axios.post(`${API}/api/auth/resend-otp`, { email, type });
+      return { success: true, message: res.data.message };
+    } catch (err) {
+      return { success: false, error: err.response?.data?.error || 'Resending OTP failed' };
     }
   };
 
@@ -92,6 +148,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     navigate('/');
   };
+
+  const updateUser = (userData) => {
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
 
   const [cache, setCache] = useState(() => {
     try {
@@ -169,7 +231,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <LangContext.Provider value={{ lang, setLang, t, translateText }}>
-      <AuthContext.Provider value={{ user, login, register, logout }}>
+      <AuthContext.Provider value={{ user, login, register, logout, updateUser, verifyEmail, forgotPassword, resetPassword, resendOtp }}>
         {children}
       </AuthContext.Provider>
     </LangContext.Provider>

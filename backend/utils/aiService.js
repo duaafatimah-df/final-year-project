@@ -5,6 +5,27 @@ const AI_URL = process.env.PYTHON_AI_URL || 'http://127.0.0.1:8000/ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
+function cleanToStandardCategory(cat) {
+  if (!cat) return 'Food';
+  const lower = cat.toLowerCase();
+  if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
+    return 'Food';
+  }
+  if (lower.includes('med') || lower.includes('health') || lower.includes('pharma') || lower.includes('drug') || lower.includes('syrup') || lower.includes('tablet')) {
+    return 'Medicine';
+  }
+  if (lower.includes('cloth') || lower.includes('garment') || lower.includes('dress') || lower.includes('wear') || lower.includes('shirt') || lower.includes('pant') || lower.includes('shoe')) {
+    return 'Clothes';
+  }
+  if (lower.includes('house') || lower.includes('furniture') || lower.includes('utensil') || lower.includes('appliance') || lower.includes('blanket') || lower.includes('bed') || lower.includes('home')) {
+    return 'Household';
+  }
+  if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
+    return 'Grocery';
+  }
+  return 'Food';
+}
+
 const aiService = {
   // 1. Item Image Analysis (Multimodal AI - Gemini Vision)
   analyzeItem: async (imageBase64, category) => {
@@ -13,10 +34,10 @@ const aiService = {
         throw new Error('GEMINI_API_KEY is not set in .env');
       }
 
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
 
       let prompt = '';
-      if (category === 'Food') {
+      if (['Food', 'Meat', 'Vegetables', 'Fruit', 'Dairy'].includes(category)) {
         prompt = `
 You are a strict food safety inspector.
 
@@ -26,13 +47,16 @@ Analyze this food image and decide clearly:
 - Spoiled food → score 0–40
 - Only use 50–69 if uncertain
 
+Classify the food item into one of these exact sub-categories: "Meat", "Vegetables", "Fruit", "Dairy", or "Food" (if it is a general cooked/prepared food item not falling into those specific sub-categories).
+
 Respond ONLY in JSON:
 
 {
   "status": "approved" | "needs_review" | "rejected",
   "safetyScore": number,
   "reason": "short reason",
-  "keywords": ["keyword1", "keyword2"]
+  "keywords": ["keyword1", "keyword2"],
+  "classifiedCategory": "Meat" | "Food" | "Vegetables" | "Fruit" | "Dairy" | "Other"
 }
 `;
       } else if (category === 'Medicine') {
@@ -49,10 +73,11 @@ Analyze the image and determine:
 
 Return JSON:
 {
-  "status": "valid | rejected | needs_review",
+  "status": "valid" | "rejected" | "needs_review",
   "safetyScore": number (0-100),
   "reason": "clear medical reasoning",
-  "keywords": ["capsules", "medicine", "tablets"]
+  "keywords": ["capsules", "medicine", "tablets"],
+  "classifiedCategory": "Medicine"
 }
 
 IMPORTANT:
@@ -66,13 +91,16 @@ You are an item quality and safety inspector.
 
 Look at this ${category || 'item'} image and evaluate its condition for donation.
 
+Classify the item into one of these categories: "Clothes", "Other", or "Medicine" or "Food" (if appropriate).
+
 Respond ONLY in JSON:
 
 {
   "status": "approved" | "needs_review" | "rejected",
   "safetyScore": number,
   "reason": "short reason",
-  "keywords": ["keyword1", "keyword2"]
+  "keywords": ["keyword1", "keyword2"],
+  "classifiedCategory": "Clothes" | "Medicine" | "Other"
 }
 
 RULES:
@@ -157,7 +185,8 @@ RULES:
         status,
         safetyScore,
         reason: parsed.reason || 'AI analysis complete',
-        keywords: parsed.keywords || []
+        keywords: parsed.keywords || [],
+        classifiedCategory: cleanToStandardCategory(parsed.classifiedCategory || category || 'Other')
       };
 
     } catch (err) {
@@ -167,7 +196,8 @@ RULES:
         status: "needs_review",
         safetyScore: 55,
         reason: "AI service error — manual review required",
-        keywords: []
+        keywords: [],
+        classifiedCategory: cleanToStandardCategory(category || 'Other')
       };
     }
   },

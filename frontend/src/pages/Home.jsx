@@ -48,7 +48,7 @@ const Home = () => {
       try {
         const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
           ? 'http://localhost:5000'
-          : 'https://spareshare-ai.up.railway.app';
+          : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
         const res = await axios.get(`${API}/api/users/receivers`);
         setDbReceivers(res.data);
       } catch (err) {
@@ -102,7 +102,7 @@ const Home = () => {
 
             <p className="hero-sub">
               {t(lang,
-                "SpareShare AI uses computer vision to verify every donation item, connecting Pakistan's surplus resources with verified nonprofits — instantly and transparently.",
+                "SpareShare AI uses computer vision to verify every donation item, connecting Pakistan's surplus resources with verified nonprofits instantly and transparently.",
                 'اسپیئر شیئر اے آئی ہر عطیہ کی تصدیق کرتا ہے اور پاکستان کے اضافی وسائل کو تصدیق شدہ غیر منافع بخش اداروں سے فوری اور شفافیت کے ساتھ جوڑتا ہے۔'
               )}
             </p>
@@ -170,8 +170,8 @@ const Home = () => {
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
-      <section className="how-it-works">
+      {/* ── HOW IT WORKS & ABOUT US ── */}
+      <section className="about-us-section" id="about">
         <div className="container">
           <div className="section-header-clean" style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
             <h2>{t(lang, 'How SpareShare AI Works', 'اسپیئر شیئر اے آئی کیسے کام کرتا ہے')}</h2>
@@ -200,7 +200,7 @@ const Home = () => {
             <button className="hero-cta-primary" onClick={() => navigate('/auth/donor')}>
               <Heart size={18} /> {t(lang, 'Donate Now', 'ابھی عطیہ کریں')}
             </button>
-            <button className="hero-cta-secondary" onClick={() => navigate('/browse')}>
+            <button className="hero-cta-secondary" onClick={() => navigate('/auth/receiver')}>
               {t(lang, 'Find Items', 'اشیاء تلاش کریں')} <ArrowRight size={16} />
             </button>
           </div>
@@ -262,6 +262,10 @@ const Home = () => {
             <Link to={`/organization/${org.id}`} key={org.id} className="org-card">
               <div className="org-card-image"><img src={org.image} alt={org.name} loading="lazy" /></div>
               <div className="org-card-content">
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <span className="org-type">{t(lang, org.type, org.type === 'NGO' ? 'این جی او' : 'ادارہ')}</span>
+                  <span className="badge-verified"><ShieldCheck size={12} /> {t(lang, 'Verified', 'تصدیق شدہ')}</span>
+                </div>
                 <h3>{org.name}</h3>
                 <p className="org-location"><MapPin size={12} /> {org.city}, {t(lang, 'Pakistan', 'پاکستان')}</p>
                 <p className="org-desc">{org.desc}</p>
@@ -276,6 +280,10 @@ const Home = () => {
             <Link to={`/organization/${org.id}`} key={org.id} className="org-card">
               <div className="org-card-image"><img src={org.image} alt={org.name} loading="lazy" /></div>
               <div className="org-card-content">
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <span className="org-type">{t(lang, org.type, org.type === 'Instagram Page' ? 'انسٹاگرام پیج' : 'سوشل میڈیا')}</span>
+                  <span className="badge-verified"><ShieldCheck size={12} /> {t(lang, 'Verified', 'تصدیق شدہ')}</span>
+                </div>
                 <h3>{org.name}</h3>
                 <p className="org-location"><MapPin size={12} /> {org.city}, {t(lang, 'Pakistan', 'پاکستان')}</p>
                 <p className="org-desc">{org.desc}</p>

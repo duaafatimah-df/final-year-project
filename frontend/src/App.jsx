@@ -10,8 +10,9 @@ import Auth from './pages/Auth';
 import ContributorPortal from './pages/ContributorPortal';
 import ReceiverPortal from './pages/ReceiverPortal';
 import AdminPortal from './pages/AdminPortal';
-import BrowsePage from './pages/BrowsePage';
+
 import MapPage from './pages/MapPage';
+import About from './pages/About';
 
 import OrganizationProfile from './pages/OrganizationProfile';
 import DonationWizard from './pages/DonationWizard';
@@ -35,8 +36,9 @@ const AppContent = () => {
           <Route path="/organization/:id" element={<OrganizationProfile />} />
           <Route path="/donate/:orgId" element={<DonationWizard />} />
           <Route path="/zakat" element={<ZakatCalculator />} />
-          <Route path="/browse" element={<BrowsePage />} />
+
           <Route path="/map" element={<MapPage />} />
+          <Route path="/about" element={<About />} />
 
           {/* Protected Routes */}
           <Route path="/contributor" element={<ProtectedRoute allowedRoles={['donor']}><ContributorPortal /></ProtectedRoute>} />

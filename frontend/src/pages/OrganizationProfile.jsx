@@ -46,7 +46,7 @@ const OrganizationProfile = () => {
         try {
           const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:5000'
-            : 'https://spareshare-ai.up.railway.app';
+            : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
           const res = await axios.get(`${API}/api/users/org/${id}`);
           setDbOrg(res.data.org);
           setDbPosts(res.data.posts || []);
