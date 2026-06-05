@@ -6,7 +6,7 @@ const AI_URL = process.env.PYTHON_AI_URL || 'http://127.0.0.1:8000/ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 function cleanToStandardCategory(cat) {
-  if (!cat) return 'Food';
+  if (!cat) return 'Other';
   const lower = cat.toLowerCase();
   if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
     return 'Food';
@@ -23,7 +23,7 @@ function cleanToStandardCategory(cat) {
   if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
     return 'Grocery';
   }
-  return 'Food';
+  return 'Other';
 }
 
 const aiService = {
@@ -91,7 +91,7 @@ You are an item quality and safety inspector.
 
 Look at this ${category || 'item'} image and evaluate its condition for donation.
 
-Classify the item into one of these categories: "Clothes", "Other", or "Medicine" or "Food" (if appropriate).
+Classify the item into one of these categories: "Clothes", "Household", "Grocery", "Medicine", "Food", or "Other" (if appropriate).
 
 Respond ONLY in JSON:
 
@@ -100,7 +100,7 @@ Respond ONLY in JSON:
   "safetyScore": number,
   "reason": "short reason",
   "keywords": ["keyword1", "keyword2"],
-  "classifiedCategory": "Clothes" | "Medicine" | "Other"
+  "classifiedCategory": "Clothes" | "Household" | "Grocery" | "Medicine" | "Food" | "Other"
 }
 
 RULES:
@@ -186,7 +186,11 @@ RULES:
         safetyScore,
         reason: parsed.reason || 'AI analysis complete',
         keywords: parsed.keywords || [],
-        classifiedCategory: cleanToStandardCategory(parsed.classifiedCategory || category || 'Other')
+        classifiedCategory: cleanToStandardCategory(
+          (parsed.classifiedCategory && parsed.classifiedCategory !== 'Other')
+            ? parsed.classifiedCategory
+            : (category || 'Other')
+        )
       };
 
     } catch (err) {

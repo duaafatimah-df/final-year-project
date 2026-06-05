@@ -30,7 +30,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 function cleanToStandardCategory(cat) {
-  if (!cat) return 'Food';
+  if (!cat) return 'Other';
   const lower = cat.toLowerCase();
   if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
     return 'Food';
@@ -47,7 +47,7 @@ function cleanToStandardCategory(cat) {
   if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
     return 'Grocery';
   }
-  return 'Food';
+  return 'Other';
 }
 
 // Create a new demand post

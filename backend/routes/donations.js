@@ -49,7 +49,7 @@ function isSummerNow() {
 }
 
 function cleanToStandardCategory(cat) {
-  if (!cat) return 'Food';
+  if (!cat) return 'Other';
   const lower = cat.toLowerCase();
   if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
     return 'Food';
@@ -66,7 +66,7 @@ function cleanToStandardCategory(cat) {
   if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
     return 'Grocery';
   }
-  return 'Food';
+  return 'Other';
 }
 
 function isFoodCategory(cat) {
@@ -244,7 +244,11 @@ router.post('/', authMiddleware, async (req, res) => {
       aiSafetyScore = preAiSafetyScore;
       isVerifiedSafe = !!preIsVerifiedSafe;
       aiAnalysisReason = preAiAnalysisReason || aiAnalysisReason;
-      finalCategory = cleanToStandardCategory(preClassifiedCategory || category || 'Other');
+      finalCategory = cleanToStandardCategory(
+        (preClassifiedCategory && preClassifiedCategory !== 'Other')
+          ? preClassifiedCategory
+          : (category || 'Other')
+      );
       
       if (aiSafetyScore >= 70) {
         finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'active';
@@ -260,7 +264,10 @@ router.post('/', authMiddleware, async (req, res) => {
       isVerifiedSafe = visualAi.safetyScore >= 70;
       aiAnalysisReason += ` | AI Vision Analysis: ${visualAi.reason}`;
       donationKeywords = visualAi.keywords || [];
-      finalCategory = cleanToStandardCategory(visualAi.classifiedCategory || category || 'Other');
+      const aiCat = visualAi.classifiedCategory;
+      finalCategory = cleanToStandardCategory(
+        (aiCat && aiCat !== 'Other') ? aiCat : (category || 'Other')
+      );
 
       if (aiSafetyScore >= 70) {
         finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'active';

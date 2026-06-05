@@ -1,6 +1,9 @@
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
+
+console.log("📧 Email Webhook URL is:", process.env.EMAIL_WEBHOOK_URL ? "CONFIGURED (detected)" : "NOT CONFIGURED");
 
 // Configure transporter
 const getTransporter = () => {
@@ -48,9 +51,36 @@ const getTransporter = () => {
 };
 
 const sendEmail = async ({ to, subject, html, text }) => {
-  const transporter = getTransporter();
   const from = process.env.EMAIL_FROM || 'SpareShare <noreply@spareshare.com>';
 
+  // 1. Try Google Apps Script Web App (HTTPS POST) if configured
+  if (process.env.EMAIL_WEBHOOK_URL) {
+    try {
+      const secret = process.env.EMAIL_WEBHOOK_SECRET || 'spareshare_secure_token_2026';
+      const response = await axios.post(process.env.EMAIL_WEBHOOK_URL.trim(), {
+        to,
+        subject,
+        html,
+        text,
+        secret
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      if (response.data && response.data.status === 'success') {
+        console.log(`✉️ Email sent successfully via Apps Script Web App to ${to}.`);
+        return true;
+      } else {
+        console.error(`❌ Apps Script Web App returned status:`, response.data);
+      }
+    } catch (err) {
+      console.error(`❌ Error sending email via Apps Script Web App to ${to}:`, err.message);
+    }
+  }
+  // 2. Fallback to standard SMTP
+  const transporter = getTransporter();
   if (transporter) {
     try {
       const info = await transporter.sendMail({ from, to, subject, html, text });
