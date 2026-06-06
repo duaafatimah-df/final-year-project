@@ -436,11 +436,11 @@ const AdminPortal = () => {
                       <tr key={d._id} style={{ opacity: isExpired ? 0.5 : 1 }}>
                         <td><strong style={{ fontSize: '0.88rem' }}>{d.title}</strong></td>
                         <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
-                          <div>{d.donorId?.name || '—'}</div>
+                          <div>{d.donorId?.name || 'N/A'}</div>
                           {d.donorId?.email && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{d.donorId.email}</div>}
                         </td>
                         <td><span className="org-type-pill">{d.category}</span></td>
-                        <td style={{ fontSize: '0.82rem' }}>{d.quantity || '—'}</td>
+                        <td style={{ fontSize: '0.82rem' }}>{d.quantity || 'N/A'}</td>
                         <td>
                           <span className="pending-badge" style={{
                             background: d.status === 'active' && !isExpired ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
@@ -491,7 +491,7 @@ const AdminPortal = () => {
                       <div className="admin-org-icon" style={{ background: 'rgba(239,68,68,0.1)' }}><Flag size={20} color="#f87171" /></div>
                       <div>
                         <h3 style={{ fontSize: '0.95rem' }}>{rep.reason}</h3>
-                        <span className="org-type-pill">Donation: {rep.donationId?.title || '—'}</span>
+                        <span className="org-type-pill">Donation: {rep.donationId?.title || 'N/A'}</span>
                       </div>
                       <span className="pending-badge" style={{ 
                         background: rep.status === 'pending' ? 'rgba(245,158,11,0.1)' : rep.status === 'reviewed' ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.1)', 
@@ -501,13 +501,13 @@ const AdminPortal = () => {
                       </span>
                     </div>
                     <div className="admin-org-details">
-                      <div className="org-detail-row"><span className="detail-label">Reporter</span><span>{rep.reporterId?.name || '—'} ({rep.reporterId?.email || '—'})</span></div>
+                      <div className="org-detail-row"><span className="detail-label">Reporter</span><span>{rep.reporterId?.name || 'N/A'} ({rep.reporterId?.email || 'N/A'})</span></div>
                       <div className="org-detail-row">
                         <span className="detail-label">Related User/Donation</span>
                         <span>
                           {rep.donationId 
-                            ? `Donation: ${rep.donationId.title} (Donor: ${rep.donationId.donorId?.name || '—'})` 
-                            : '—'}
+                            ? `Donation: ${rep.donationId.title} (Donor: ${rep.donationId.donorId?.name || 'N/A'})` 
+                            : 'N/A'}
                         </span>
                       </div>
                       <div className="org-detail-row"><span className="detail-label">Details</span><span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>{rep.details || 'No details'}</span></div>

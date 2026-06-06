@@ -27,6 +27,8 @@ const ProfilePage = ({ onClose }) => {
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
+  const [avgRating, setAvgRating] = useState(user?.avgRating ?? null);
+  const [ratingCount, setRatingCount] = useState(user?.ratingCount ?? 0);
 
   // Load from DB on mount
   useEffect(() => {
@@ -44,6 +46,8 @@ const ProfilePage = ({ onClose }) => {
         setAddress(u.location?.address || '');
         setLat(u.location?.lat || '');
         setLng(u.location?.lng || '');
+        setAvgRating(u.avgRating);
+        setRatingCount(u.ratingCount);
       } catch (err) {
         console.error('Failed to load profile', err);
       }
@@ -72,8 +76,8 @@ const ProfilePage = ({ onClose }) => {
       setEditing(false);
       setTimeout(() => setSaveMsg(''), 3000);
     } catch (err) {
-      setSaveMsg('❌ Save failed. Try again.');
-      setTimeout(() => setSaveMsg(''), 3000);
+      setSaveMsg(`❌ Save failed: ${err.response?.data?.error || 'Try again.'}`);
+      setTimeout(() => setSaveMsg(''), 5000);
     } finally {
       setSaving(false);
     }
@@ -152,7 +156,11 @@ const ProfilePage = ({ onClose }) => {
             <div className="pp-quick-stats">
               <div className="pp-qs-item">
                 <Star size={16} color="#f59e0b" />
-                <span>99% Trust Score</span>
+                <span>
+                  {ratingCount > 0 && avgRating !== null && avgRating !== undefined
+                    ? `${Math.round(avgRating * 20)}% Trust Score`
+                    : (isReceiver ? 'New NGO' : 'New Partner')}
+                </span>
               </div>
               <div className="pp-qs-item">
                 <ShieldCheck size={16} color="#10b981" />
@@ -171,7 +179,7 @@ const ProfilePage = ({ onClose }) => {
                 {editing ? (
                   <input value={name} onChange={e => setName(e.target.value)} className="pp-input" placeholder="Your full name" />
                 ) : (
-                  <p className="pp-value">{name || '—'}</p>
+                  <p className="pp-value">{name || 'N/A'}</p>
                 )}
               </div>
 
@@ -186,7 +194,7 @@ const ProfilePage = ({ onClose }) => {
                 {editing ? (
                   <input value={phone} onChange={e => setPhone(e.target.value)} className="pp-input" placeholder="+92 300 0000000" />
                 ) : (
-                  <p className="pp-value">{phone || '—'}</p>
+                  <p className="pp-value">{phone || 'N/A'}</p>
                 )}
               </div>
 
@@ -195,7 +203,7 @@ const ProfilePage = ({ onClose }) => {
                 {editing ? (
                   <input value={city} onChange={e => setCity(e.target.value)} className="pp-input" placeholder="e.g. Karachi, Pakistan" />
                 ) : (
-                  <p className="pp-value">{city || '—'}</p>
+                  <p className="pp-value">{city || 'N/A'}</p>
                 )}
               </div>
 
@@ -204,7 +212,7 @@ const ProfilePage = ({ onClose }) => {
                 {editing ? (
                   <input value={address} onChange={e => setAddress(e.target.value)} className="pp-input" placeholder="e.g. House 123, Street 4, Gul Colony" />
                 ) : (
-                  <p className="pp-value">{address || '—'}</p>
+                  <p className="pp-value">{address || 'N/A'}</p>
                 )}
               </div>
 
@@ -213,7 +221,7 @@ const ProfilePage = ({ onClose }) => {
                 {editing ? (
                   <input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} className="pp-input" placeholder="Latitude" />
                 ) : (
-                  <p className="pp-value">{lat || '—'}</p>
+                  <p className="pp-value">{lat || 'N/A'}</p>
                 )}
               </div>
 
@@ -222,7 +230,7 @@ const ProfilePage = ({ onClose }) => {
                 {editing ? (
                   <input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} className="pp-input" placeholder="Longitude" />
                 ) : (
-                  <p className="pp-value">{lng || '—'}</p>
+                  <p className="pp-value">{lng || 'N/A'}</p>
                 )}
               </div>
 

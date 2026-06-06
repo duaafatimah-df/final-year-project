@@ -582,7 +582,7 @@ router.get('/ai-matched', authMiddleware, async (req, res) => {
 
     // Get all active donations
     const donations = await Donation.find({ status: 'active', isExpired: false })
-      .populate('donorId', 'name city profilePic')
+      .populate('donorId', 'name email phone city profilePic location')
       .limit(50);
 
     // Format to match AI service structure
@@ -957,6 +957,7 @@ router.get('/all', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Not authorized' });
     const donations = await Donation.find()
+      .select('-imageUrl')
       .populate('donorId', 'name email')
       .sort({ createdAt: -1 })
       .limit(200);

@@ -37,6 +37,7 @@ const DonationSchema = new mongoose.Schema({
 
   // Trust / Report
   rating: { type: Number, default: null },   // receiver rating after pickup
+  donorRating: { type: Number, default: null }, // donor rating of receiver after pickup
   reportCount: { type: Number, default: 0 },
 
   // Legacy AI fields (kept for backward compat)

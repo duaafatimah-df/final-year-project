@@ -156,12 +156,13 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
             position: { lat: userLat, lng: userLng },
             map,
             icon: {
-              path: maps.SymbolPath.CIRCLE,
-              scale: 9,
+              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
               fillColor: '#3b82f6',
               fillOpacity: 1,
-              strokeWeight: 2,
+              strokeWeight: 1.5,
               strokeColor: 'white',
+              scale: 1.8,
+              anchor: new maps.Point(12, 22),
             },
             title: 'You are here',
             zIndex: 999,
@@ -213,13 +214,14 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
       leafletMarkersRef.current = [];
 
       // User location marker
-      const userMarker = L.circleMarker([userLat, userLng], {
-        radius: 9,
-        fillColor: '#3b82f6',
-        fillOpacity: 1,
-        color: 'white',
-        weight: 2
-      }).addTo(map).bindPopup('You are here (Donor Location)');
+      const userIcon = L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#3b82f6" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="white" stroke-width="1.5"/></svg>`,
+        className: 'custom-leaflet-pin',
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+        popupAnchor: [0, -36]
+      });
+      const userMarker = L.marker([userLat, userLng], { icon: userIcon }).addTo(map).bindPopup('You are here (Donor Location)');
       leafletMarkersRef.current.push(userMarker);
 
       // Create LatLngBounds
@@ -232,13 +234,15 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
 
         const color = isRejected ? '#9ca3af' : '#10b981';
 
-        const marker = L.circleMarker([rLat, rLng], {
-          radius: 9,
-          fillColor: color,
-          fillOpacity: 0.9,
-          color: 'white',
-          weight: 2
-        }).addTo(map);
+        const recIcon = L.divIcon({
+          html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="${color}" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="white" stroke-width="1.5"/></svg>`,
+          className: 'custom-leaflet-pin',
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          popupAnchor: [0, -36]
+        });
+
+        const marker = L.marker([rLat, rLng], { icon: recIcon }).addTo(map);
 
         bounds.extend([rLat, rLng]);
 
@@ -286,12 +290,13 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         map: googleMapRef.current,
         title: 'You are here (Donor Location)',
         icon: {
-          path: maps.SymbolPath.CIRCLE,
-          scale: 9,
+          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
           fillColor: '#3b82f6', // Blue for donor location
           fillOpacity: 1,
-          strokeWeight: 2,
+          strokeWeight: 1.5,
           strokeColor: 'white',
+          scale: 1.8,
+          anchor: new maps.Point(12, 22),
         }
       });
       markersRef.current.push(userMarker);
@@ -311,12 +316,13 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
           position: { lat: rLat, lng: rLng },
           map: googleMapRef.current,
           icon: {
-            path: maps.SymbolPath.CIRCLE,
-            scale: 9,
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
             fillColor: color,
             fillOpacity: 0.9,
-            strokeWeight: 2,
+            strokeWeight: 1.5,
             strokeColor: 'white',
+            scale: 1.8,
+            anchor: new maps.Point(12, 22),
           },
           title: item.receiverId?.name || 'Receiver',
           opacity: isRejected ? 0.5 : 1,

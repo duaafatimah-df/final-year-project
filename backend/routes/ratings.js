@@ -13,11 +13,9 @@ const authMiddleware = (req, res, next) => {
   catch { res.status(401).json({ error: 'Token is not valid' }); }
 };
 
-// POST /api/ratings — Receiver rates a donor after pickup
+// POST /api/ratings — Either receiver rates donor OR donor rates receiver
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    if (req.user.role !== 'receiver') return res.status(403).json({ error: 'Only receivers can rate donations' });
-
     const { donationId, rating } = req.body;
     if (!donationId || rating == null) return res.status(400).json({ error: 'donationId and rating are required.' });
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
@@ -25,31 +23,45 @@ router.post('/', authMiddleware, async (req, res) => {
     const donation = await Donation.findById(donationId);
     if (!donation) return res.status(404).json({ error: 'Donation not found' });
 
-    // Save rating to donation
-    donation.rating = rating;
-    await donation.save();
+    let targetUser = null;
 
-    // Update donor's average rating
-    const donor = await User.findById(donation.donorId);
-    if (donor) {
-      const prevTotal = (donor.avgRating || 0) * (donor.ratingCount || 0);
-      const newCount = (donor.ratingCount || 0) + 1;
-      const newAvg = (prevTotal + rating) / newCount;
-      donor.avgRating = Math.round(newAvg * 10) / 10;
-      donor.ratingCount = newCount;
-
-      // Flag donor if avg < 3.0
-      if (newAvg < 3.0) {
-        donor.flagCount = (donor.flagCount || 0) + 1;
-        // Auto-block if flagCount >= 3
-        if (donor.flagCount >= 3) {
-          donor.isBlocked = true;
-        }
-      }
-      await donor.save();
+    if (req.user.role === 'receiver') {
+      // Receiver rating the donor
+      donation.rating = rating;
+      await donation.save();
+      targetUser = await User.findById(donation.donorId);
+    } else if (req.user.role === 'donor') {
+      // Donor rating the receiver
+      donation.donorRating = rating;
+      await donation.save();
+      targetUser = await User.findById(donation.receiverId || donation.claimedBy);
+    } else {
+      return res.status(403).json({ error: 'Not authorized to rate exchanges' });
     }
 
-    res.json({ message: 'Rating submitted successfully.', rating, donorAvgRating: donor?.avgRating });
+    // Update target partner's average rating
+    if (targetUser) {
+      const prevTotal = (targetUser.avgRating || 0) * (targetUser.ratingCount || 0);
+      const newCount = (targetUser.ratingCount || 0) + 1;
+      const newAvg = (prevTotal + rating) / newCount;
+      targetUser.avgRating = Math.round(newAvg * 10) / 10;
+      targetUser.ratingCount = newCount;
+
+      // Flag if avg < 3.0
+      if (newAvg < 3.0) {
+        targetUser.flagCount = (targetUser.flagCount || 0) + 1;
+        if (targetUser.flagCount >= 3) {
+          targetUser.isBlocked = true;
+        }
+      }
+      await targetUser.save();
+    }
+
+    res.json({ 
+      message: 'Rating submitted successfully.', 
+      rating, 
+      partnerAvgRating: targetUser?.avgRating 
+    });
   } catch (err) {
     console.error('Rating POST Error:', err.message);
     res.status(500).json({ error: 'Server Error' });

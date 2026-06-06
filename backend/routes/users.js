@@ -16,12 +16,112 @@ const authMiddleware = (req, res, next) => {
   catch { res.status(401).json({ error: 'Token is not valid' }); }
 };
 
+// Helper to calculate dynamic rating and count from database
+const getDynamicRatings = async (userId, role) => {
+  try {
+    if (role === 'donor') {
+      const ratings = await Donation.find({ donorId: userId, rating: { $ne: null } });
+      const ratingCount = ratings.length;
+      const avgRating = ratingCount > 0 
+        ? Math.round((ratings.reduce((acc, curr) => acc + curr.rating, 0) / ratingCount) * 10) / 10 
+        : null;
+      return { avgRating, ratingCount };
+    } else if (role === 'receiver') {
+      const ratings = await Donation.find({
+        $or: [{ receiverId: userId }, { claimedBy: userId }],
+        donorRating: { $ne: null }
+      });
+      const ratingCount = ratings.length;
+      const avgRating = ratingCount > 0 
+        ? Math.round((ratings.reduce((acc, curr) => acc + curr.donorRating, 0) / ratingCount) * 10) / 10 
+        : null;
+      return { avgRating, ratingCount };
+    }
+  } catch (err) {
+    console.error('getDynamicRatings Error:', err.message);
+  }
+  return { avgRating: null, ratingCount: 0 };
+};
+
+const getBulkRatings = async (userIds, role) => {
+  try {
+    if (role === 'donor') {
+      const results = await Donation.aggregate([
+        { $match: { donorId: { $in: userIds }, rating: { $ne: null } } },
+        {
+          $group: {
+            _id: '$donorId',
+            avgRating: { $avg: '$rating' },
+            ratingCount: { $sum: 1 }
+          }
+        }
+      ]);
+      const dict = {};
+      results.forEach(r => {
+        if (r._id) {
+          dict[r._id.toString()] = {
+            avgRating: Math.round(r.avgRating * 10) / 10,
+            ratingCount: r.ratingCount
+          };
+        }
+      });
+      return dict;
+    } else if (role === 'receiver') {
+      const results = await Donation.aggregate([
+        {
+          $match: {
+            $or: [
+              { receiverId: { $in: userIds } },
+              { claimedBy: { $in: userIds } }
+            ],
+            donorRating: { $ne: null }
+          }
+        },
+        {
+          $project: {
+            receiverId: { $ifNull: ['$receiverId', '$claimedBy'] },
+            donorRating: 1
+          }
+        },
+        {
+          $match: {
+            receiverId: { $in: userIds },
+            donorRating: { $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: '$receiverId',
+            avgRating: { $avg: '$donorRating' },
+            ratingCount: { $sum: 1 }
+          }
+        }
+      ]);
+      const dict = {};
+      results.forEach(r => {
+        if (r._id) {
+          dict[r._id.toString()] = {
+            avgRating: Math.round(r.avgRating * 10) / 10,
+            ratingCount: r.ratingCount
+          };
+        }
+      });
+      return dict;
+    }
+  } catch (err) {
+    console.error('getBulkRatings Error:', err.message);
+  }
+  return {};
+};
+
 // GET /api/users/me
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    const ratings = await getDynamicRatings(user._id, user.role);
+    const userObj = { ...user.toObject(), ...ratings };
+    res.json(userObj);
   } catch { res.status(500).send('Server Error'); }
 });
 
@@ -32,35 +132,46 @@ router.put('/me', authMiddleware, async (req, res) => {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Validation during profile save: address, lat, and lng are required
-    if (address === undefined || address === null || String(address).trim() === '') {
-      return res.status(400).json({ error: 'Full Street Address is required' });
+    // Validation during profile save: address, lat, and lng are required for receiver (NGO)
+    if (user.role === 'receiver') {
+      if (address === undefined || address === null || String(address).trim() === '') {
+        return res.status(400).json({ error: 'Full Street Address is required' });
+      }
+      if (lat === undefined || lat === null || lat === '' || isNaN(parseFloat(lat))) {
+        return res.status(400).json({ error: 'Latitude is required and must be a valid number' });
+      }
+      if (lng === undefined || lng === null || lng === '' || isNaN(parseFloat(lng))) {
+        return res.status(400).json({ error: 'Longitude is required and must be a valid number' });
+      }
+      user.location = {
+        lat: parseFloat(lat),
+        lng: parseFloat(lng),
+        address: String(address).trim()
+      };
+    } else {
+      // Optional for donors
+      const hasLat = lat !== undefined && lat !== null && lat !== '' && !isNaN(parseFloat(lat));
+      const hasLng = lng !== undefined && lng !== null && lng !== '' && !isNaN(parseFloat(lng));
+      user.location = {
+        lat: hasLat ? parseFloat(lat) : null,
+        lng: hasLng ? parseFloat(lng) : null,
+        address: address ? String(address).trim() : ''
+      };
     }
-    if (lat === undefined || lat === null || lat === '' || isNaN(parseFloat(lat))) {
-      return res.status(400).json({ error: 'Latitude is required and must be a valid number' });
-    }
-    if (lng === undefined || lng === null || lng === '' || isNaN(parseFloat(lng))) {
-      return res.status(400).json({ error: 'Longitude is required and must be a valid number' });
-    }
-
     if (name) user.name = name;
     if (phone) user.phone = phone;
     if (bio !== undefined) user.bio = bio;
     if (city !== undefined) user.city = city;
-
-    user.location = {
-      lat: parseFloat(lat),
-      lng: parseFloat(lng),
-      address: String(address).trim()
-    };
     if (profilePic !== undefined) user.profilePic = profilePic;
     if (profileBanner !== undefined) user.profileBanner = profileBanner;
     await user.save();
-    const updatedUser = user.toObject();
+    const ratings = await getDynamicRatings(user._id, user.role);
+    const updatedUser = { ...user.toObject(), ...ratings };
     delete updatedUser.password;
     res.json(updatedUser);
   } catch (err) {
-    res.status(500).send('Server Error');
+    console.error('PUT /me Error:', err);
+    res.status(500).json({ error: err.message || 'Server Error' });
   }
 });
 
@@ -68,16 +179,34 @@ router.put('/me', authMiddleware, async (req, res) => {
 router.get('/receivers', async (req, res) => {
   try {
     const receivers = await User.find({ role: 'receiver', isVerified: true }).select('-password');
-    res.json(receivers);
-  } catch { res.status(500).send('Server Error'); }
+    const receiverIds = receivers.map(r => r._id);
+    const ratingsDict = await getBulkRatings(receiverIds, 'receiver');
+    const receiversWithRatings = receivers.map(r => {
+      const ratings = ratingsDict[r._id.toString()] || { avgRating: null, ratingCount: 0 };
+      return { ...r.toObject(), ...ratings };
+    });
+    res.json(receiversWithRatings);
+  } catch (err) {
+    console.error('receivers route error:', err);
+    res.status(500).send('Server Error');
+  }
 });
 
 // GET /api/users/donors
 router.get('/donors', authMiddleware, async (req, res) => {
   try {
     const donors = await User.find({ role: 'donor' }).select('-password');
-    res.json(donors);
-  } catch { res.status(500).send('Server Error'); }
+    const donorIds = donors.map(d => d._id);
+    const ratingsDict = await getBulkRatings(donorIds, 'donor');
+    const donorsWithRatings = donors.map(d => {
+      const ratings = ratingsDict[d._id.toString()] || { avgRating: null, ratingCount: 0 };
+      return { ...d.toObject(), ...ratings };
+    });
+    res.json(donorsWithRatings);
+  } catch (err) {
+    console.error('donors route error:', err);
+    res.status(500).send('Server Error');
+  }
 });
 
 // GET /api/users/org/:id — public org profile + posts
@@ -85,8 +214,10 @@ router.get('/org/:id', async (req, res) => {
   try {
     const org = await User.findById(req.params.id).select('-password');
     if (!org || org.role !== 'receiver') return res.status(404).json({ error: 'Organization not found' });
+    const ratings = await getDynamicRatings(org._id, 'receiver');
+    const orgObj = { ...org.toObject(), ...ratings };
     const posts = await Post.find({ receiverId: req.params.id }).sort({ createdAt: -1 });
-    res.json({ org, posts });
+    res.json({ org: orgObj, posts });
   } catch { res.status(500).send('Server Error'); }
 });
 
@@ -172,7 +303,8 @@ router.get('/admin-stats', authMiddleware, async (req, res) => {
 router.get('/all', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Not authorized' });
-    const users = await User.find().select('-password').sort({ createdAt: -1 }).limit(500);
+    // Exclude profilePic and profileBanner for all users query in admin to avoid returning massive base64 strings
+    const users = await User.find().select('-password -profilePic -profileBanner').sort({ createdAt: -1 }).limit(500);
     res.json(users);
   } catch (err) {
     console.error('All Users Error:', err);

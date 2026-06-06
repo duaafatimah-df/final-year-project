@@ -212,7 +212,7 @@ const Home = () => {
         <div className="container">
           <div className="section-header-clean" style={{ textAlign: 'center', marginBottom: '3rem' }}>
             <h2>{t(lang, 'Our Growing Impact', 'ہمارا بڑھتا ہوا اثر')}</h2>
-            <p>{t(lang, 'Every donation tracked, every life touched in real time', 'ہر عطیہ ٹریک کیا گیا، ہر زندگی چھوئی گئی — حقیقی وقت میں')}</p>
+            <p>{t(lang, 'Every donation tracked, every life touched in real time', 'ہر عطیہ ٹریک کیا گیا، ہر زندگی چھوئی گئی، حقیقی وقت میں')}</p>
           </div>
           <div className="impact-grid">
             {[

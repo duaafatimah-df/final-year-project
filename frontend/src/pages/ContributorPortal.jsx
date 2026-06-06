@@ -7,7 +7,7 @@ import {
   RefreshCw, ArrowRight,
   LogOut, Search, Globe, Home, Activity, Calculator,
   UploadCloud, MapPin, ScanLine, Sun, Clock, Send, ShieldCheck,
-  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2
+  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star
 } from "lucide-react";
 import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
@@ -19,6 +19,39 @@ import './ContributorPortal.css';
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
   : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
+
+const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
 
 // Mock Data for Charts
 const monthlyData = [
@@ -116,6 +149,9 @@ const ContributorPortal = () => {
   const [currentDonationId, setCurrentDonationId] = useState(null);
   const [aiKeywords, setAiKeywords] = useState([]);
   const [selectedHistoryDonation, setSelectedHistoryDonation] = useState(null);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Carousel Ref
   const carouselRef = useRef(null);
@@ -209,6 +245,37 @@ const ContributorPortal = () => {
     }
   };
 
+  const submitRating = async (donationId) => {
+    if (selectedRating === 0) return;
+    setIsSubmittingRating(true);
+    try {
+      await axios.post(`${API}/api/ratings`, {
+        donationId,
+        rating: selectedRating
+      }, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
+      alert('⭐⭐⭐⭐⭐ Thank you! Your review has been submitted successfully.');
+      
+      // Update local state for the completed donation
+      setMyDonations(prev => prev.map(don => 
+        don._id === donationId ? { ...don, donorRating: selectedRating } : don
+      ));
+      
+      // Update selectedHistoryDonation rating so it updates in real-time in the open modal
+      setSelectedHistoryDonation(prev => ({ ...prev, donorRating: selectedRating }));
+      
+      // Reset rating selection
+      setSelectedRating(0);
+      setHoveredRating(0);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Failed to submit rating. Please try again.');
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
   // Dropzone setup
   const onDrop = useCallback(acceptedFiles => {
     if (acceptedFiles.length > 0) {
@@ -265,7 +332,8 @@ const ContributorPortal = () => {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const imageUrl = reader.result;
+        const rawImageUrl = reader.result;
+        const imageUrl = await compressImage(rawImageUrl);
         const res = await axios.post(`${API}/api/donations`, {
           title: donTitle,
           category,
@@ -1177,11 +1245,11 @@ const ContributorPortal = () => {
             </div>
 
             {myDonations.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#f8fafc', borderRadius: 16, border: '1px dashed #e2e8f0' }}>
-                <Heart size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem', display: 'block' }} />
-                <h3 style={{ color: '#94a3b8', marginBottom: '0.5rem' }}>No Donations Yet</h3>
-                <p style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Start donating to help organizations in need.</p>
-                <button className="btn btn-primary" onClick={() => setActiveTab('home')}>New Donation →</button>
+              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                <Heart size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>{t(lang, 'No Donations Yet', 'کوئی عطیہ نہیں')}</h3>
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{t(lang, 'Start donating to help organizations in need.', 'ضرورت مند تنظیموں کی مدد کے لیے عطیہ کرنا شروع کریں۔')}</p>
+                <button className="btn btn-primary" onClick={() => setActiveTab('home')}>{t(lang, 'New Donation →', 'نیا عطیہ ←')}</button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -1218,7 +1286,7 @@ const ContributorPortal = () => {
                     const icon = catIcons[cat] || '📦';
 
                     return (
-                      <div key={cat} style={{ background: '#f8fafc', borderRadius: '18px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', transition: 'all 0.3s ease' }}>
+                      <div key={cat} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', transition: 'all 0.3s ease' }}>
                         {/* Summary Header Card */}
                         <div 
                           onClick={() => setExpandedCategories(prev => ({ ...prev, [cat]: !prev[cat] }))}
@@ -1228,24 +1296,24 @@ const ContributorPortal = () => {
                             justifyContent: 'space-between', 
                             alignItems: 'center', 
                             cursor: 'pointer', 
-                            background: isExpanded ? 'linear-gradient(to right, #f1f5f9, #f8fafc)' : 'white',
-                            borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none',
+                            background: isExpanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)',
+                            borderBottom: isExpanded ? '1px solid rgba(255,255,255,0.08)' : 'none',
                             transition: 'all 0.25s ease'
                           }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = isExpanded ? 'linear-gradient(to right, #f1f5f9, #f8fafc)' : 'white'; }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = isExpanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)'; }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <span style={{ fontSize: '1.8rem' }}>{icon}</span>
                             <div>
-                              <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.15rem' }}>{t(lang, cat, cat)}</h3>
-                              <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, display: 'inline-block', marginTop: '4px' }}>
+                              <h3 style={{ margin: 0, fontWeight: 800, color: '#f1f5f9', fontSize: '1.15rem' }}>{t(lang, cat, cat)}</h3>
+                              <span style={{ background: 'rgba(16,185,129,0.15)', color: '#6ee7b7', fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, display: 'inline-block', marginTop: '4px' }}>
                                 {donsInCat.length} {donsInCat.length === 1 ? 'Item' : 'Items'}
                               </span>
                             </div>
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
                             <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{isExpanded ? t(lang, 'Collapse', 'بند کریں') : t(lang, 'Expand', 'کھولیں')}</span>
                             <span style={{ transition: 'transform 0.3s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}>
                               ▶
@@ -1255,7 +1323,7 @@ const ContributorPortal = () => {
 
                         {/* Collapsible content (in-place) */}
                         {isExpanded && (
-                          <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: '#f8fafc' }}>
+                          <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.01)' }}>
                             {donsInCat.map(don => {
                               const status = don.status;
                               const statusConfig = {
@@ -1267,7 +1335,7 @@ const ContributorPortal = () => {
                               }[status] || { label: status, bg: '#f1f5f9', color: '#475569' };
 
                               return (
-                                <div key={don._id} style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => setSelectedHistoryDonation(don)} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                                <div key={don._id} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => setSelectedHistoryDonation(don)} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
                                   {/* Status bar */}
                                   <div style={{ background: statusConfig.bg, padding: '8px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ color: statusConfig.color, fontWeight: 700, fontSize: '0.85rem' }}>{statusConfig.label}</span>
@@ -1278,22 +1346,22 @@ const ContributorPortal = () => {
                                     <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                                       {/* Donation image */}
                                       {don.imageUrl ? (
-                                        <img src={don.imageUrl} alt="Donation" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: '2px solid #e2e8f0', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
+                                        <img src={don.imageUrl} alt="Donation" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: '2px solid rgba(255,255,255,0.08)', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
                                       ) : (
-                                        <div style={{ width: 90, height: 90, borderRadius: 10, background: '#f0fdf4', border: '2px solid #d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div style={{ width: 90, height: 90, borderRadius: 10, background: 'rgba(16,185,129,0.08)', border: '2px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                           <Heart size={36} color="#10b981" />
                                         </div>
                                       )}
 
                                       {/* Info */}
                                       <div style={{ flex: 1, minWidth: 180 }}>
-                                        <p style={{ fontWeight: 700, color: '#0f172a', margin: '0 0 6px', fontSize: '1.1rem' }}>{don.title}</p>
-                                        <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: '#64748b' }}>Category: <strong style={{ color: '#10b981' }}>{don.category || 'General'}</strong></p>
-                                        <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#64748b' }}>AI Safety Score: <strong style={{ color: don.status === 'rejected' ? '#ef4444' : '#10b981' }}>{don.aiSafetyScore}%</strong></p>
+                                        <p style={{ fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px', fontSize: '1.1rem' }}>{don.title}</p>
+                                        <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: '#94a3b8' }}>Category: <strong style={{ color: '#10b981' }}>{don.category || 'General'}</strong></p>
+                                        <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#94a3b8' }}>AI Safety Score: <strong style={{ color: don.status === 'rejected' ? '#ef4444' : '#10b981' }}>{don.aiSafetyScore}%</strong></p>
 
                                         {don.status === 'rejected' && (
-                                          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px', display: 'inline-block' }}>
-                                            <p style={{ margin: 0, color: '#991b1b', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.4 }}>{don.aiAnalysisReason}</p>
+                                          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '10px 14px', borderRadius: '8px', display: 'inline-block' }}>
+                                            <p style={{ margin: 0, color: '#fca5a5', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.4 }}>{don.aiAnalysisReason}</p>
                                           </div>
                                         )}
 
@@ -1301,12 +1369,12 @@ const ContributorPortal = () => {
                                         {(historyTab === 'active') && (
                                           <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
                                             <button onClick={(e) => { e.stopPropagation(); handleUpdateStatus(don._id, 'completed'); }} style={{ background: '#10b981', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Mark Completed</button>
-                                            <button onClick={(e) => handleDeleteDonation(don._id, e)} style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Delete</button>
+                                            <button onClick={(e) => handleDeleteDonation(don._id, e)} style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Delete</button>
                                           </div>
                                         )}
                                         {(historyTab === 'rejected') && (
                                           <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                                            <button onClick={(e) => handleDeleteDonation(don._id, e)} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Delete Record</button>
+                                            <button onClick={(e) => handleDeleteDonation(don._id, e)} style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>Delete Record</button>
                                           </div>
                                         )}
                                       </div>
@@ -1314,7 +1382,7 @@ const ContributorPortal = () => {
                                       {/* Receiver info */}
                                       {don.status === 'completed' && don.receiverId ? (
                                         <div
-                                          style={{ background: '#f0fdf4', borderRadius: 12, padding: '1.2rem', minWidth: 240, border: '2px solid #10b981', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(16,185,129,0.1)' }}
+                                          style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 12, padding: '1.2rem', minWidth: 240, border: '1px solid rgba(16,185,129,0.25)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
                                           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
                                           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                                           onClick={(e) => { e.stopPropagation(); navigate(`/organization/${don.receiverId._id}`); }}
@@ -1332,11 +1400,11 @@ const ContributorPortal = () => {
                                               </div>
                                             )}
                                             <div>
-                                              <p style={{ margin: 0, fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>{don.receiverId.name}</p>
-                                              <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>{don.receiverId.city || 'Verified NGO'}</p>
+                                              <p style={{ margin: 0, fontWeight: 800, fontSize: '0.95rem', color: '#f1f5f9' }}>{don.receiverId.name}</p>
+                                              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>{don.receiverId.city || 'Verified NGO'}</p>
                                             </div>
                                           </div>
-                                          <div style={{ borderTop: '1px solid #d1fae5', paddingTop: '10px', marginTop: '6px' }}>
+                                          <div style={{ borderTop: '1px solid rgba(16,185,129,0.1)', paddingTop: '10px', marginTop: '6px' }}>
                                             <button style={{ width: '100%', background: '#10b981', color: 'white', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
                                               👉 View Organization Details
                                             </button>
@@ -1382,10 +1450,10 @@ const ContributorPortal = () => {
             </p>
 
             {donorNotifications.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#f8fafc', borderRadius: 16, border: '1px dashed #e2e8f0' }}>
-                <Bell size={48} color="#cbd5e1" style={{ margin: '0 auto 1rem', display: 'block' }} />
-                <h3 style={{ color: '#94a3b8', marginBottom: '0.5rem' }}>{t(lang, 'No Notifications Yet', 'ابھی تک کوئی اطلاع نہیں ہے')}</h3>
-                <p style={{ color: '#cbd5e1', fontSize: '0.9rem' }}>{t(lang, 'Your donation status updates will appear here.', 'آپ کے عطیہ کی حیثیت کی اپ ڈیٹس یہاں ظاہر ہوں گی۔')}</p>
+              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                <Bell size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>{t(lang, 'No Notifications Yet', 'ابھی تک کوئی اطلاع نہیں ہے')}</h3>
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t(lang, 'Your donation status updates will appear here.', 'آپ کے عطیہ کی حیثیت کی اپ ڈیٹس یہاں ظاہر ہوں گی۔')}</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1427,17 +1495,17 @@ const ContributorPortal = () => {
                     <div
                       key={notif._id}
                       style={{
-                        background: 'white',
+                        background: 'rgba(255,255,255,0.02)',
                         borderRadius: '16px',
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid rgba(255,255,255,0.07)',
                         borderLeft: `5px solid ${borderLeftColor}`,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
                         overflow: 'hidden',
                         transition: 'all 0.2s ease'
                       }}
                     >
                       {/* Header bar */}
-                      <div style={{ background: '#f8fafc', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                         <span style={{ background: statusBg, color: statusColor, padding: '2px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>
                           {statusLabel}
                         </span>
@@ -1485,10 +1553,10 @@ const ContributorPortal = () => {
                       <div style={{ padding: '1.25rem 1.5rem' }}>
                         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                           <div style={{ flex: 1, minWidth: '250px' }}>
-                            <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
+                            <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
                               {notif.donationId?.title || t(lang, 'Donation Item', 'عطیہ کی چیز')}
                             </h4>
-                            <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569', lineHeight: 1.5 }}>
+                            <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.5 }}>
                               {isAccepted && (
                                 <>
                                   🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> ({t(lang, notif.donationId?.category || '', notif.donationId?.category || '')}) {t(lang, 'has been accepted by', 'قبول کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Please coordinate with them for pickup using the contact details below.', 'برائے مہربانی نیچے دیئے گئے رابطے کی تفصیلات کا استعمال کرتے ہوئے پک اپ کے لیے ان سے رابطہ کریں۔')}
@@ -1526,7 +1594,7 @@ const ContributorPortal = () => {
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
                                   <Building2 size={16} color="#10b981" />
-                                  <strong style={{ color: '#065f46', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                  <strong style={{ color: '#34d399', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                     {t(lang, 'Receiver Profile Details', 'وصول کنندہ کے پروفائل کی تفصیلات')}
                                   </strong>
                                 </div>
@@ -1540,15 +1608,15 @@ const ContributorPortal = () => {
                                     )}
                                   </div>
                                   <div>
-                                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{notif.receiverId.name}</div>
-                                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>📍 {notif.receiverId.city || 'Verified NGO'}</div>
+                                    <div style={{ fontWeight: 800, color: '#f1f5f9', fontSize: '0.95rem' }}>{notif.receiverId.name}</div>
+                                    <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>📍 {notif.receiverId.city || 'Verified NGO'}</div>
                                   </div>
                                 </div>
 
                                 {/* Contact grids */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '0.85rem' }}>
                                   <div>
-                                    <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                    <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
                                       {t(lang, 'Email Address', 'ای میل ایڈریس')}
                                     </span>
                                     <a href={`mailto:${notif.receiverId.email}`} style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
@@ -1556,7 +1624,7 @@ const ContributorPortal = () => {
                                     </a>
                                   </div>
                                   <div>
-                                    <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                    <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
                                       {t(lang, 'Contact Number', 'رابطہ نمبر')}
                                     </span>
                                     <a href={`tel:${notif.receiverId.phone}`} style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
@@ -1566,10 +1634,10 @@ const ContributorPortal = () => {
 
                                   {notif.receiverId.location?.address && (
                                     <div style={{ gridColumn: '1 / -1', borderTop: '1px solid rgba(16, 185, 129, 0.1)', paddingTop: '8px' }}>
-                                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                      <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
                                         {t(lang, 'Street Address', 'گلی کا پتہ')}
                                       </span>
-                                      <div style={{ color: '#1e293b', fontWeight: 600, lineHeight: 1.4 }}>
+                                      <div style={{ color: '#f1f5f9', fontWeight: 600, lineHeight: 1.4 }}>
                                         {notif.receiverId.location.address}
                                       </div>
                                     </div>
@@ -1578,10 +1646,10 @@ const ContributorPortal = () => {
                                   {notif.receiverId.location?.lat && notif.receiverId.location?.lng && (
                                     <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(16, 185, 129, 0.1)', paddingTop: '8px', flexWrap: 'wrap', gap: '8px' }}>
                                       <div>
-                                        <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                        <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
                                           {t(lang, 'Coordinates', 'کوآرڈینیٹس')}
                                         </span>
-                                        <div style={{ color: '#475569', fontSize: '0.8rem' }}>
+                                        <div style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>
                                           {notif.receiverId.location.lat.toFixed(6)}, {notif.receiverId.location.lng.toFixed(6)}
                                         </div>
                                       </div>
@@ -1767,6 +1835,69 @@ const ContributorPortal = () => {
                         <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', marginTop: '2px' }}>
                           📍 {selectedHistoryDonation.receiverDetails?.city || 'Pakistan'} • 🏷️ Verified NGO
                         </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Trust Metrics Rating */}
+              {selectedHistoryDonation.status === 'completed' && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '16px', padding: '1.25rem', marginTop: '1.25rem' }}>
+                  <h3 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#f59e0b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    ⭐ Rate & Review Receiver
+                  </h3>
+                  {selectedHistoryDonation.donorRating ? (
+                    <div>
+                      <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Star
+                            key={star}
+                            size={20}
+                            fill={star <= selectedHistoryDonation.donorRating ? '#f59e0b' : 'none'}
+                            color={star <= selectedHistoryDonation.donorRating ? '#f59e0b' : '#64748b'}
+                          />
+                        ))}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.84rem', color: 'rgba(255,255,255,0.7)' }}>
+                        You rated this organization {selectedHistoryDonation.donorRating} out of 5 stars.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)' }}>
+                        Provide a trust score review based on your pickup or interaction experience to prevent fraud and update organization trust score.
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <Star
+                              key={star}
+                              size={24}
+                              style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                              fill={(hoveredRating || selectedRating) >= star ? '#f59e0b' : 'none'}
+                              color={(hoveredRating || selectedRating) >= star ? '#f59e0b' : '#64748b'}
+                              onMouseEnter={() => setHoveredRating(star)}
+                              onMouseLeave={() => setHoveredRating(0)}
+                              onClick={() => setSelectedRating(star)}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          className="btn btn-primary"
+                          style={{
+                            background: 'linear-gradient(to right, #f59e0b, #d97706)',
+                            borderColor: '#f59e0b',
+                            fontSize: '0.8rem',
+                            padding: '6px 14px',
+                            borderRadius: '10px',
+                            cursor: selectedRating === 0 || isSubmittingRating ? 'not-allowed' : 'pointer',
+                            opacity: selectedRating === 0 || isSubmittingRating ? 0.6 : 1
+                          }}
+                          disabled={selectedRating === 0 || isSubmittingRating}
+                          onClick={() => submitRating(selectedHistoryDonation._id)}
+                        >
+                          {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
+                        </button>
                       </div>
                     </div>
                   )}

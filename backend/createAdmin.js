@@ -16,7 +16,8 @@ async function createAdmin() {
 
     const existing = await User.findOne({ email: ADMIN_EMAIL });
     if (existing) {
-      // if already exists but not admin or missing verification, update it
+      const salt = await bcrypt.genSalt(10);
+      existing.password = await bcrypt.hash(ADMIN_PASSWORD, salt);
       existing.role = 'admin';
       existing.isVerified = true;
       existing.isEmailVerified = true;

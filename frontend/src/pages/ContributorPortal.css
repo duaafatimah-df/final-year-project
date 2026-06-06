@@ -585,3 +585,60 @@
 .ai-sc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .ai-sc-header h4 { font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin: 0; }
 .ai-sc-header p { font-size: 0.75rem; color: var(--text-muted); margin: 0; }
+
+/* ── Mobile Responsiveness Overrides ── */
+@media (max-width: 768px) {
+  .portal-header {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    gap: 0.75rem;
+  }
+  .portal-logo span {
+    display: none; /* Hide text on mobile, keep logo icon only */
+  }
+  .portal-nav {
+    order: 3;
+    width: 100%;
+    margin-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+  .portal-actions {
+    margin-left: auto;
+  }
+  .portal-search {
+    padding: 5px 10px;
+  }
+  .portal-search input {
+    width: 100px;
+  }
+  .portal-main {
+    padding: 1rem 1.25rem;
+  }
+  .portal-title {
+    font-size: 1.5rem;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .ai-dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .portal-header {
+    justify-content: space-between;
+  }
+  .portal-search {
+    display: none; /* Hide search bar in header on extra small screens */
+  }
+  .portal-actions {
+    gap: 0.25rem;
+  }
+  .nav-tab {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+}
+

@@ -166,9 +166,10 @@
 .pp-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
 @media (max-width: 600px) {
-  .pp-body { flex-direction: column; }
-  .pp-avatar-col { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .pp-body { flex-direction: column; overflow-y: auto; }
+  .pp-avatar-col { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
   .pp-field-grid { grid-template-columns: 1fr; }
+  .pp-fields-col { overflow-y: visible; }
 }
 
 .pp-field label {
