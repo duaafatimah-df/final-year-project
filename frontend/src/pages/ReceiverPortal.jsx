@@ -6,10 +6,12 @@ import axios from 'axios';
 import {
   LogOut, Search, Globe, Building2, List, BellRing,
   ShieldCheck, Phone, Mail, UserCircle, MapPin, Check, X, Camera,
-  Activity, ScanLine, Clock, ArrowRight, CheckCircle2, XCircle, Trash2, Star
+  Activity, ScanLine, Clock, ArrowRight, CheckCircle2, XCircle, Trash2, Star,
+  RefreshCw
 } from 'lucide-react';
 import ProfilePage from '../components/ProfilePage';
 import CustomDropdown from '../components/CustomDropdown';
+import DirectionMap from '../components/DirectionMap';
 import './ReceiverPortal.css';
 
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -63,8 +65,15 @@ const ReceiverPortal = () => {
   const [completedDonations, setCompletedDonations] = useState([]);
   const [aiMatches, setAiMatches] = useState([]);
   const [realDonors, setRealDonors] = useState([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
   const [selectedRating, setSelectedRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [avgRating, setAvgRating] = useState(user?.avgRating || null);
   const [ratingCount, setRatingCount] = useState(user?.ratingCount || 0);
@@ -78,12 +87,12 @@ const ReceiverPortal = () => {
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileBio, setProfileBio] = useState('');
-  const [profileCity, setProfileCity] = useState('');
-  const [profileBanner, setProfileBanner] = useState('');
-  const [profileAddress, setProfileAddress] = useState('');
-  const [profileLat, setProfileLat] = useState('');
-  const [profileLng, setProfileLng] = useState('');
+  const [profileBio, setProfileBio] = useState(user?.bio || localStorage.getItem(`bio_${user?.id}`) || '');
+  const [profileCity, setProfileCity] = useState(user?.city || localStorage.getItem(`city_${user?.id}`) || 'Pakistan');
+  const [profileBanner, setProfileBanner] = useState(user?.profileBanner || localStorage.getItem(`banner_${user?.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop');
+  const [profileAddress, setProfileAddress] = useState(user?.location?.address || '');
+  const [profileLat, setProfileLat] = useState((user?.location?.lat !== undefined && user?.location?.lat !== null) ? user.location.lat : '');
+  const [profileLng, setProfileLng] = useState((user?.location?.lng !== undefined && user?.location?.lng !== null) ? user.location.lng : '');
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Modals and Interaction State
@@ -97,13 +106,20 @@ const ReceiverPortal = () => {
   const [previewImage, setPreviewImage] = useState(null);
 
   const [newPostTitle, setNewPostTitle] = useState('');
-  const [newPostCategory, setNewPostCategory] = useState('Food');
-  const [newPostUrgency, setNewPostUrgency] = useState('Medium');
-  const [newPostDesc, setNewPostDesc] = useState('');
-
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
+
+  useEffect(() => {
+    if (user) {
+      setProfileBio(user.bio || localStorage.getItem(`bio_${user.id}`) || '');
+      setProfileCity(user.city || localStorage.getItem(`city_${user.id}`) || 'Pakistan');
+      setProfileBanner(user.profileBanner || localStorage.getItem(`banner_${user.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop');
+      setProfileAddress(user.location?.address || '');
+      setProfileLat((user.location?.lat !== undefined && user.location?.lat !== null) ? user.location.lat : '');
+      setProfileLng((user.location?.lng !== undefined && user.location?.lng !== null) ? user.location.lng : '');
+    }
+  }, [user]);
 
   useEffect(() => {
     const loadProfileData = async () => {
@@ -116,27 +132,20 @@ const ReceiverPortal = () => {
         setProfileCity(u.city || localStorage.getItem(`city_${user?.id}`) || 'Pakistan');
         setProfileBanner(u.profileBanner || localStorage.getItem(`banner_${user?.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop');
         setProfileAddress(u.location?.address || '');
-        setProfileLat(u.location?.lat !== undefined ? u.location.lat : '');
-        setProfileLng(u.location?.lng !== undefined ? u.location.lng : '');
+        setProfileLat((u.location?.lat !== undefined && u.location?.lat !== null) ? u.location.lat : '');
+        setProfileLng((u.location?.lng !== undefined && u.location?.lng !== null) ? u.location.lng : '');
         setAvgRating(u.avgRating);
         setRatingCount(u.ratingCount);
       } catch (err) {
         console.error('Failed to load profile from DB', err);
-        const savedBio = localStorage.getItem(`bio_${user?.id}`) || '';
-        const savedCity = localStorage.getItem(`city_${user?.id}`) || 'Pakistan';
-        const savedBanner = localStorage.getItem(`banner_${user?.id}`) || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1470&auto=format&fit=crop';
-        setProfileBio(savedBio);
-        setProfileCity(savedCity);
-        setProfileBanner(savedBanner);
       }
     };
     loadProfileData();
-    fetchMyPosts();
-    fetchIncoming();
-    fetchCompleted();
-    fetchAiMatches();
-    fetchRealDonors();
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [lang]);
 
   const handleSaveProfile = async () => {
     setProfileSaving(true);
@@ -165,80 +174,102 @@ const ReceiverPortal = () => {
     }
   };
 
-  const fetchMyPosts = async () => {
-    try {
-      const res = await axios.get(`${API}/api/posts/my-posts`, {
-        headers: { 'x-auth-token': localStorage.getItem('token') }
-      });
-      setMyPosts(res.data);
-    } catch (err) { console.error('Error fetching posts', err); }
-  };
+  const fetchData = async (showNotification = false) => {
+    const langParam = lang === 'Eng' ? 'en' : 'ur';
+    let successCount = 0;
+    let failCount = 0;
+    const token = localStorage.getItem('token');
 
-  const fetchIncoming = async () => {
-    try {
-      const res = await axios.get(`${API}/api/notifications`,
-        { headers: { 'x-auth-token': localStorage.getItem('token') } });
-      const mapped = res.data
-        .filter(notif => notif.status === 'pending')
-        .map(notif => {
-          if (!notif.donationId) return null;
-          return {
-            ...notif.donationId,
-            _id: notif.donationId._id,
-            notificationId: notif._id,
-            donorId: notif.donorId,
-            notificationTitle: notif.title,
-            notificationMessage: notif.message,
-            notificationStatus: notif.status
-          };
-        }).filter(Boolean);
+    const [postsRes, notifRes, completedRes, aiMatchedRes, donorsRes, browseRes] = await Promise.allSettled([
+      axios.get(`${API}/api/posts/my-posts?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      }),
+      axios.get(`${API}/api/notifications?status=pending&lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      }),
+      axios.get(`${API}/api/donations/completed?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      }),
+      axios.get(`${API}/api/donations/ai-matched?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      }),
+      axios.get(`${API}/api/users/donors?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      }),
+      axios.get(`${API}/api/donations/browse?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      })
+    ]);
+
+    // 1. Fetch posts
+    if (postsRes.status === 'fulfilled') {
+      setMyPosts(postsRes.value.data);
+      successCount++;
+    } else {
+      console.error('Error fetching posts', postsRes.reason.message);
+      failCount++;
+    }
+
+    // 2. Fetch incoming notifications
+    if (notifRes.status === 'fulfilled') {
+      const mapped = notifRes.value.data.map(notif => {
+        if (!notif.donationId) return null;
+        return {
+          ...notif.donationId,
+          _id: notif.donationId._id,
+          notificationId: notif._id,
+          donorId: notif.donorId,
+          notificationTitle: notif.title,
+          notificationMessage: notif.message,
+          notificationStatus: notif.status
+        };
+      }).filter(Boolean);
       setIncomingRequests(mapped);
-    } catch (err) { console.error('Error fetching incoming', err); }
-  };
+      successCount++;
+    } else {
+      console.error('Error fetching incoming', notifRes.reason.message);
+      failCount++;
+    }
 
-  const fetchCompleted = async () => {
-    try {
-      const res = await axios.get(`${API}/api/donations/completed`,
-        { headers: { 'x-auth-token': localStorage.getItem('token') } });
-      setCompletedDonations(res.data);
-    } catch (err) { console.error('Error fetching completed', err); }
-  };
+    // 3. Fetch completed
+    if (completedRes.status === 'fulfilled') {
+      setCompletedDonations(completedRes.value.data);
+      successCount++;
+    } else {
+      console.error('Error fetching completed', completedRes.reason.message);
+      failCount++;
+    }
 
-  const fetchAiMatches = async () => {
-    try {
-      const res = await axios.get(`${API}/api/donations/ai-matched`,
-        { headers: { 'x-auth-token': localStorage.getItem('token') } });
-      if (res.data && res.data.length > 0) {
-        setAiMatches(res.data);
+    // 4. Fetch AI matches
+    if (aiMatchedRes.status === 'fulfilled') {
+      if (aiMatchedRes.value.data && aiMatchedRes.value.data.length > 0) {
+        setAiMatches(aiMatchedRes.value.data);
       } else {
         setAiMatches(mockAiMatches);
       }
-    } catch (err) {
-      console.error('Error fetching AI matches', err);
+      successCount++;
+    } else {
+      console.error('Error fetching AI matches', aiMatchedRes.reason.message);
       setAiMatches(mockAiMatches);
+      failCount++;
     }
-  };
 
-  const fetchRealDonors = async () => {
+    // 5 & 6. Process donors list & active donations
+    let donors = [];
+    let activeDonations = [];
+    if (donorsRes.status === 'fulfilled') {
+      donors = donorsRes.value.data || [];
+    } else {
+      console.error("Failed to fetch real donors list:", donorsRes.reason?.message);
+    }
+
+    if (browseRes.status === 'fulfilled') {
+      activeDonations = browseRes.value.data || [];
+    } else {
+      console.error("Failed to fetch browse donations:", browseRes.reason?.message);
+    }
+
     try {
-      const token = localStorage.getItem('token');
-      let donors = [];
-      let activeDonations = [];
-
-      try {
-        const res = await axios.get(`${API}/api/users/donors`, { headers: { 'x-auth-token': token } });
-        donors = res.data || [];
-      } catch (err) {
-        console.error("Failed to fetch real donors list:", err);
-      }
-
-      try {
-        const res = await axios.get(`${API}/api/donations/browse`, { headers: { 'x-auth-token': token } });
-        activeDonations = res.data || [];
-      } catch (err) {
-        console.error("Failed to fetch browse donations:", err);
-      }
-
       const mappedDonors = donors.map(d => {
         const dDonations = Array.isArray(activeDonations) ? activeDonations.filter(don => {
           const donorIdObj = don.donorId;
@@ -262,11 +293,30 @@ const ReceiverPortal = () => {
         };
       });
 
-      setRealDonors(mappedDonors);
+      setRealDonors([...mappedDonors, ...mockDonors]);
+      successCount++;
     } catch (err) {
-      console.error("Failed in fetchRealDonors:", err);
+      console.error('Error processing real donors mapping', err.message);
+      setRealDonors(mockDonors);
+      failCount++;
+    }
+
+    if (showNotification) {
+      if (failCount === 0) {
+        showToast(lang === 'Eng' ? 'Refreshed!' : 'تازہ کر دیا گیا!', 'success');
+      } else if (successCount > 0) {
+        showToast(lang === 'Eng' ? `Refreshed ${successCount} feeds, ${failCount} failed.` : `لوڈ کیا گیا: ${successCount}، ناکام: ${failCount}`, 'warning');
+      } else {
+        showToast(lang === 'Eng' ? 'Failed to refresh.' : 'لوڈ کرنے میں ناکام۔', 'error');
+      }
     }
   };
+
+  const fetchMyPosts = () => fetchData();
+  const fetchIncoming = () => fetchData();
+  const fetchCompleted = () => fetchData();
+  const fetchAiMatches = () => fetchData();
+  const fetchRealDonors = () => fetchData();
 
   const handleIgnoreMatch = (matchId) => {
     const updated = [...ignoredMatches, matchId];
@@ -281,7 +331,8 @@ const ReceiverPortal = () => {
     try {
       await axios.post(`${API}/api/ratings`, {
         donationId,
-        rating: selectedRating
+        rating: selectedRating,
+        comment: ratingComment
       }, {
         headers: { 'x-auth-token': localStorage.getItem('token') }
       });
@@ -298,6 +349,7 @@ const ReceiverPortal = () => {
       // Reset rating selection
       setSelectedRating(0);
       setHoveredRating(0);
+      setRatingComment('');
       
       // Refresh real donors list so trust scores are updated
       fetchRealDonors();
@@ -538,17 +590,26 @@ const ReceiverPortal = () => {
       const menu = document.getElementById('recv-lang-menu');
       if (menu && !e.target.closest('.lang-dropdown-wrapper')) menu.classList.remove('open');
     }}>
+      {/* Toast notifications */}
+      {toast && (
+        <div className={`pp-toast ${toast.type}`} style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000, background: toast.type === 'success' ? '#10b981' : (toast.type === 'warning' ? '#f59e0b' : '#ef4444'), color: 'white', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 600 }}>
+          {toast.msg}
+        </div>
+      )}
+
       <header className="portal-header">
         <div className="portal-logo" onClick={() => navigate('/')}>
           <img src="/logo.png" alt="SpareShare" />
           <span>Receiver Portal</span>
         </div>
 
+
+
         <nav className="portal-nav">
-          <button className={`nav-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+          <button className={`nav-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => { setActiveTab('profile'); fetchData(); }}>
             <Building2 size={18} /> {lang === 'Eng' ? 'NGO Profile' : 'این جی او پروفائل'}
           </button>
-          <button className={`nav-tab ${activeTab === 'ai_matches' ? 'active' : ''}`} onClick={() => { setActiveTab('ai_matches'); fetchAiMatches(); }} style={{ position: 'relative' }}>
+          <button className={`nav-tab ${activeTab === 'ai_matches' ? 'active' : ''}`} onClick={() => { setActiveTab('ai_matches'); fetchData(); }} style={{ position: 'relative' }}>
             <ScanLine size={18} /> {lang === 'Eng' ? 'AI Matches' : 'اے آئی میچز'}
             {aiMatches.length > 0 && (
               <span style={{ marginLeft: 4, background: '#3b82f6', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
@@ -556,10 +617,10 @@ const ReceiverPortal = () => {
               </span>
             )}
           </button>
-          <button className={`nav-tab ${activeTab === 'my_posts' ? 'active' : ''}`} onClick={() => { setActiveTab('my_posts'); fetchMyPosts(); }}>
+          <button className={`nav-tab ${activeTab === 'my_posts' ? 'active' : ''}`} onClick={() => { setActiveTab('my_posts'); fetchData(); }}>
             <List size={18} /> {lang === 'Eng' ? 'My Demand Posts' : 'میری پوسٹس'}
           </button>
-          <button className={`nav-tab ${activeTab === 'incoming' ? 'active' : ''}`} onClick={() => { setActiveTab('incoming'); fetchIncoming(); }} style={{ position: 'relative' }}>
+          <button className={`nav-tab ${activeTab === 'incoming' ? 'active' : ''}`} onClick={() => { setActiveTab('incoming'); fetchData(); }} style={{ position: 'relative' }}>
             <BellRing size={18} /> {lang === 'Eng' ? 'Incoming' : 'آنے والے'}
             {incomingRequests.filter(r => !requestStatus[r._id]).length > 0 && (
               <span style={{
@@ -573,7 +634,7 @@ const ReceiverPortal = () => {
               </span>
             )}
           </button>
-          <button className={`nav-tab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => { setActiveTab('completed'); fetchCompleted(); }} style={{ position: 'relative' }}>
+          <button className={`nav-tab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => { setActiveTab('completed'); fetchData(); }} style={{ position: 'relative' }}>
             <CheckCircle2 size={18} /> {lang === 'Eng' ? 'Completed' : 'مکمل'}
             {completedDonations.length > 0 && (
               <span style={{ marginLeft: 4, background: '#10b981', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
@@ -584,7 +645,7 @@ const ReceiverPortal = () => {
         </nav>
 
         <div className="portal-actions">
-          <div className="portal-search" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <div className="portal-search">
             <Search size={16} className="search-icon" />
             <input
               type="text"
@@ -627,8 +688,8 @@ const ReceiverPortal = () => {
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Globe size={16} />
-              {lang === 'Eng' ? 'English' : 'اردو'}
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}>
+              <span className="hide-mobile">{lang === 'Eng' ? 'English' : 'اردو'}</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }} className="hide-mobile">
                 <path d="M1 3L5 7L9 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
@@ -668,13 +729,16 @@ const ReceiverPortal = () => {
             ) : (
               <UserCircle size={20} />
             )}
-            <span>{user?.name?.split(' ')[0]}</span>
+            <span className="hide-mobile">{user?.name?.split(' ')[0]}</span>
           </button>
           <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={16} /> <span className="logout-text">{lang === 'Eng' ? 'Logout' : 'لاگ آؤٹ'}</span>
+            <LogOut size={16} /> <span className="logout-text hide-mobile">{lang === 'Eng' ? 'Logout' : 'لاگ آؤٹ'}</span>
           </button>
         </div>
       </header>
+
+      {/* Mobile Drawer Menu */}
+
 
       {/* Profile Slide-in Panel */}
       {showProfile && <ProfilePage onClose={() => setShowProfile(false)} />}
@@ -1075,13 +1139,22 @@ const ReceiverPortal = () => {
 
         {activeTab === 'incoming' && (
           <div className="receiver-incoming-view animate-fade-in">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-              <h2 className="section-title" style={{ margin: 0 }}>Incoming Donation Requests</h2>
-              {incomingRequests.filter(r => !requestStatus[r._id]).length > 0 && (
-                <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
-                  🔔 {incomingRequests.filter(r => !requestStatus[r._id]).length} New
-                </span>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h2 className="section-title" style={{ margin: 0 }}>Incoming Donation Requests</h2>
+                {incomingRequests.filter(r => !requestStatus[r._id]).length > 0 && (
+                  <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    🔔 {incomingRequests.filter(r => !requestStatus[r._id]).length} New
+                  </span>
+                )}
+              </div>
+              <button
+                className="btn btn-outline"
+                onClick={() => fetchData(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600 }}
+              >
+                <RefreshCw size={16} /> {lang === 'Eng' ? 'Refresh' : 'تازہ کریں'}
+              </button>
             </div>
             <p style={{ marginBottom: '2rem', color: 'var(--text-muted)' }}>Donors have sent you items: review and decide to Accept or Reject each request.</p>
 
@@ -1455,6 +1528,16 @@ const ReceiverPortal = () => {
                 </div>
               </div>
 
+              <DirectionMap 
+                donorLat={selectedRequest.donorId?.location?.lat} 
+                donorLng={selectedRequest.donorId?.location?.lng} 
+                receiverLat={profileLat || user?.location?.lat} 
+                receiverLng={profileLng || user?.location?.lng} 
+                receiverName={user?.name} 
+                donorCity={selectedRequest.donorId?.city}
+                receiverCity={profileCity || user?.city}
+              />
+
               {/* Donation Image */}
               <div style={{ marginBottom: '1.25rem' }}>
                 <p style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 0.75rem' }}>Donation Items Photo</p>
@@ -1679,18 +1762,18 @@ const ReceiverPortal = () => {
 
       {/* View My Post Details Modal */}
       {selectedMyPost && (
-        <div className="modal-overlay" onClick={() => setSelectedMyPost(null)}>
-          <div className="modal-content post-modal" onClick={e => e.stopPropagation()}>
-            <button className="close-modal" onClick={() => setSelectedMyPost(null)}><X size={20} /></button>
+        <div className="modal-overlay" onClick={() => setSelectedMyPost(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
+          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ background: 'rgba(10, 18, 36, 0.98)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', color: 'white' }}>
+            <button className="close-modal" onClick={() => setSelectedMyPost(null)} style={{ background: 'rgba(255,255,255,0.08)', color: 'white' }}><X size={20} /></button>
             <div className="rd-header">
-              <h2>{selectedMyPost.title}</h2>
-              <p>Status: <strong className={`text-${selectedMyPost.status === 'Fulfilled' ? 'primary' : 'danger'}`}>{selectedMyPost.status}</strong></p>
+              <h2 style={{ color: 'white', fontWeight: 800 }}>{selectedMyPost.title}</h2>
+              <p style={{ color: 'var(--text-muted)' }}>Status: <strong className={selectedMyPost.status === 'Fulfilled' ? 'text-primary' : 'text-danger'} style={{ color: selectedMyPost.status === 'Fulfilled' ? '#10b981' : '#ef4444' }}>{selectedMyPost.status}</strong></p>
             </div>
             <div className="rd-body">
-              <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem' }}>
-                <h3 style={{ marginBottom: '0.5rem' }}>Description</h3>
-                <p>{selectedMyPost.desc}</p>
-                <div style={{ marginTop: '1rem', display: 'flex', gap: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem', color: 'white' }}>
+                <h3 style={{ marginBottom: '0.5rem', color: 'white' }}>Description</h3>
+                <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.95rem', lineHeight: 1.6 }}>{selectedMyPost.desc || selectedMyPost.description}</p>
+                <div style={{ marginTop: '1rem', display: 'flex', gap: '2rem', color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
                   <span><strong>Urgency:</strong> {selectedMyPost.urgency}</span>
                   <span><strong>Posted:</strong> {new Date(selectedMyPost.createdAt).toLocaleDateString()}</span>
                 </div>
@@ -1885,7 +1968,7 @@ const ReceiverPortal = () => {
                     <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                       Provide a trust score review based on your pickup or interaction experience to prevent fraud and update donor trust score.
                     </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         {[1, 2, 3, 4, 5].map(star => (
                           <Star
@@ -1900,22 +1983,42 @@ const ReceiverPortal = () => {
                           />
                         ))}
                       </div>
-                      <button
-                        className="btn btn-primary"
+                      <textarea
+                        value={ratingComment}
+                        onChange={e => setRatingComment(e.target.value)}
+                        placeholder="Write a brief review about this exchange (e.g. was there any suspicious activity?)..."
                         style={{
-                          background: 'linear-gradient(to right, #f59e0b, #d97706)',
-                          borderColor: '#f59e0b',
-                          fontSize: '0.8rem',
-                          padding: '6px 14px',
-                          borderRadius: '10px',
-                          cursor: selectedRating === 0 || isSubmittingRating ? 'not-allowed' : 'pointer',
-                          opacity: selectedRating === 0 || isSubmittingRating ? 0.6 : 1
+                          width: '100%',
+                          minHeight: '60px',
+                          background: 'rgba(0,0,0,0.25)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          color: 'white',
+                          fontSize: '0.85rem',
+                          marginBottom: '10px',
+                          resize: 'vertical',
+                          outline: 'none'
                         }}
-                        disabled={selectedRating === 0 || isSubmittingRating}
-                        onClick={() => submitRating(selectedCompletedDonation._id)}
-                      >
-                        {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
-                      </button>
+                      />
+                      <div>
+                        <button
+                          className="btn btn-primary"
+                          style={{
+                            background: 'linear-gradient(to right, #f59e0b, #d97706)',
+                            borderColor: '#f59e0b',
+                            fontSize: '0.8rem',
+                            padding: '6px 14px',
+                            borderRadius: '10px',
+                            cursor: selectedRating === 0 || isSubmittingRating ? 'not-allowed' : 'pointer',
+                            opacity: selectedRating === 0 || isSubmittingRating ? 0.6 : 1
+                          }}
+                          disabled={selectedRating === 0 || isSubmittingRating}
+                          onClick={() => submitRating(selectedCompletedDonation._id)}
+                        >
+                          {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

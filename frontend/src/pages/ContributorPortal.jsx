@@ -7,7 +7,7 @@ import {
   RefreshCw, ArrowRight,
   LogOut, Search, Globe, Home, Activity, Calculator,
   UploadCloud, MapPin, ScanLine, Sun, Clock, Send, ShieldCheck,
-  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star
+  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star, Camera
 } from "lucide-react";
 import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
@@ -81,6 +81,13 @@ const ContributorPortal = () => {
   const [historyTab, setHistoryTab] = useState('active'); // active, completed, rejected
   const [expandedCategories, setExpandedCategories] = useState({});
   const [donorNotifications, setDonorNotifications] = useState([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [ratingComment, setRatingComment] = useState('');
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Donation Form State
   const [file, setFile] = useState(null);
@@ -156,6 +163,69 @@ const ContributorPortal = () => {
   // Carousel Ref
   const carouselRef = useRef(null);
 
+  // Camera Integration
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    try {
+      setIsCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      streamRef.current = stream;
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Camera access failed:", err);
+      alert("Could not access camera. Please check permissions.");
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      fetch(dataUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const capturedFile = new File([blob], "camera_capture.jpg", { type: "image/jpeg" });
+          Object.assign(capturedFile, {
+            preview: dataUrl
+          });
+          setFile(capturedFile);
+          stopCamera();
+        });
+    }
+  };
+
   const scrollLeft = () => carouselRef.current?.scrollBy({ left: -400, behavior: 'smooth' });
   const scrollRight = () => carouselRef.current?.scrollBy({ left: 400, behavior: 'smooth' });
 
@@ -181,43 +251,96 @@ const ContributorPortal = () => {
   }, [user]);
 
   // Fetch active receiver posts and verified orgs
-  const fetchData = async () => {
-    try {
-      const postsRes = await axios.get(`${API}/api/posts/active`);
-      setReceiverDemands(postsRes.data);
+  const fetchData = async (showNotification = false) => {
+    const langParam = lang === 'Eng' ? 'en' : 'ur';
+    let successCount = 0;
+    let failCount = 0;
+    const token = localStorage.getItem('token');
 
-      const orgsRes = await axios.get(`${API}/api/users/receivers`);
+    const [postsRes, orgsRes, donRes, notifRes] = await Promise.allSettled([
+      axios.get(`${API}/api/posts/active?lang=${langParam}`),
+      axios.get(`${API}/api/users/receivers?lang=${langParam}`),
+      axios.get(`${API}/api/donations/my-donations?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      }),
+      axios.get(`${API}/api/notifications/donor?lang=${langParam}`, {
+        headers: { 'x-auth-token': token }
+      })
+    ]);
+
+    // 1. Fetch active receiver posts
+    if (postsRes.status === 'fulfilled') {
+      setReceiverDemands(postsRes.value.data);
+      successCount++;
+    } else {
+      console.error("Failed to fetch posts:", postsRes.reason.message);
+      failCount++;
+    }
+
+    // 2. Fetch verified orgs
+    if (orgsRes.status === 'fulfilled') {
+      const dynamicOrgs = orgsRes.value.data.map(r => ({
+        ...r,
+        _id: r._id,
+        orgType: r.orgType || 'NGO',
+        email: r.email,
+        isDynamic: true
+      }));
+
       const formattedStaticOrgs = organizations.map(org => ({
         ...org,
         _id: org.id,
         orgType: org.type,
-        email: org.desc
+        email: org.desc,
+        isDynamic: false
       }));
-      setVerifiedOrgs([...formattedStaticOrgs, ...orgsRes.data]);
 
-      // Fetch donor's own donations
-      const donRes = await axios.get(`${API}/api/donations/my-donations`, {
-        headers: { 'x-auth-token': localStorage.getItem('token') }
-      });
-      setMyDonations(donRes.data);
+      // Re-order: Dynamic/real database receivers first!
+      const staticNgos = formattedStaticOrgs.filter(o => o.orgType === 'NGO' || o.orgType === 'Foundation').slice(0, 5);
+      const staticSocials = formattedStaticOrgs.filter(o => o.orgType === 'Social' || o.orgType === 'Instagram Page' || o.orgType === 'Community Group').slice(0, 5);
 
-      // Fetch donor notifications
-      try {
-        const notifRes = await axios.get(`${API}/api/notifications/donor`, {
-          headers: { 'x-auth-token': localStorage.getItem('token') }
-        });
-        setDonorNotifications(notifRes.data);
-      } catch (notifErr) {
-        console.error('Failed to fetch donor notifications', notifErr);
+      const dynamicNgos = dynamicOrgs.filter(o => o.orgType === 'NGO' || o.orgType === 'Foundation');
+      const dynamicSocials = dynamicOrgs.filter(o => o.orgType === 'Social' || o.orgType === 'Instagram Page' || o.orgType === 'Community Group');
+
+      setVerifiedOrgs([...dynamicNgos, ...staticNgos, ...dynamicSocials, ...staticSocials]);
+      successCount++;
+    } else {
+      console.error("Failed to fetch receivers:", orgsRes.reason.message);
+      failCount++;
+    }
+
+    // 3. Fetch donor's own donations
+    if (donRes.status === 'fulfilled') {
+      setMyDonations(donRes.value.data);
+      successCount++;
+    } else {
+      console.error("Failed to fetch my donations:", donRes.reason.message);
+      failCount++;
+    }
+
+    // 4. Fetch donor notifications
+    if (notifRes.status === 'fulfilled') {
+      setDonorNotifications(notifRes.value.data);
+      successCount++;
+    } else {
+      console.error("Failed to fetch notifications:", notifRes.reason.message);
+      failCount++;
+    }
+
+    if (showNotification) {
+      if (failCount === 0) {
+        showToast(lang === 'Eng' ? 'Data Refreshed Successfully!' : 'ڈیٹا کامیابی سے تازہ ہو گیا!', 'success');
+      } else if (successCount > 0) {
+        showToast(lang === 'Eng' ? `Refreshed ${successCount} feeds, ${failCount} failed.` : `دوبارہ لوڈ کیا گیا: ${successCount}، ناکام: ${failCount}`, 'warning');
+      } else {
+        showToast(lang === 'Eng' ? 'Failed to refresh data.' : 'ڈیٹا تازہ کرنے میں ناکام۔', 'error');
       }
-    } catch (err) {
-      console.error('Failed to fetch data', err);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [lang]);
 
   const handleDeleteDonation = async (id, e) => {
     if (e) e.stopPropagation();
@@ -251,7 +374,8 @@ const ContributorPortal = () => {
     try {
       await axios.post(`${API}/api/ratings`, {
         donationId,
-        rating: selectedRating
+        rating: selectedRating,
+        comment: ratingComment
       }, {
         headers: { 'x-auth-token': localStorage.getItem('token') }
       });
@@ -268,6 +392,7 @@ const ContributorPortal = () => {
       // Reset rating selection
       setSelectedRating(0);
       setHoveredRating(0);
+      setRatingComment('');
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || 'Failed to submit rating. Please try again.');
@@ -445,18 +570,25 @@ const ContributorPortal = () => {
         menu.classList.remove('open');
       }
     }}>
+      {/* Toast notifications */}
+      {toast && (
+        <div className={`pp-toast ${toast.type}`} style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000, background: toast.type === 'success' ? '#10b981' : '#ef4444', color: 'white', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontWeight: 600 }}>
+          {toast.msg}
+        </div>
+      )}
+
       {/* Portal Custom Header */}
-      <header className="portal-header">
+      <header className="portal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="portal-logo" onClick={() => navigate('/')}>
           <img src="/logo.png" alt="SpareShare" />
           <span>Donor Portal</span>
         </div>
 
         <nav className="portal-nav">
-          <button className={`nav-tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+          <button className={`nav-tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => { setActiveTab('home'); fetchData(); }}>
             <Home size={18} /> {lang === 'Eng' ? 'Dashboard Home' : 'ڈیش بورڈ'}
           </button>
-          <button className={`nav-tab ${activeTab === 'ai_dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('ai_dashboard')}>
+          <button className={`nav-tab ${activeTab === 'ai_dashboard' ? 'active' : ''}`} onClick={() => { setActiveTab('ai_dashboard'); fetchData(); }}>
             <Activity size={18} /> {lang === 'Eng' ? 'AI Dashboard' : 'اے آئی ڈیش بورڈ'}
           </button>
           <button className={`nav-tab ${activeTab === 'zakat' ? 'active' : ''}`} onClick={() => setActiveTab('zakat')}>
@@ -486,7 +618,27 @@ const ContributorPortal = () => {
               placeholder={lang === 'Eng' ? "Search nonprofits..." : "تلاش کریں..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingRight: searchQuery ? '30px' : '12px' }}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px',
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           <div className="lang-dropdown-wrapper" style={{ position: 'relative' }}>
             <button
@@ -495,8 +647,8 @@ const ContributorPortal = () => {
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Globe size={16} />
-              {lang === 'Eng' ? 'English' : 'اردو'}
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}>
+              <span className="hide-mobile">{lang === 'Eng' ? 'English' : 'اردو'}</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }} className="hide-mobile">
                 <path d="M1 3L5 7L9 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
@@ -536,7 +688,7 @@ const ContributorPortal = () => {
                   direction: 'rtl', fontFamily: 'var(--font-urdu, serif)'
                 }}
               >
-                🇵🇰 اردو
+                🇵🇰 Urdu (اردو)
               </button>
             </div>
           </div>
@@ -550,13 +702,16 @@ const ContributorPortal = () => {
             ) : (
               <UserCircle size={20} />
             )}
-            <span>{user?.name?.split(' ')[0]}</span>
+            <span className="hide-mobile">{user?.name?.split(' ')[0]}</span>
           </button>
           <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={16} /> {lang === 'Eng' ? 'Logout' : 'لاگ آؤٹ'}
+            <LogOut size={16} /> <span className="hide-mobile">{lang === 'Eng' ? 'Logout' : 'لاگ آؤٹ'}</span>
           </button>
         </div>
       </header>
+
+      {/* Mobile Drawer Menu */}
+
 
       {/* Profile Slide-in Panel */}
       {showProfile && <ProfilePage onClose={() => setShowProfile(false)} />}
@@ -637,17 +792,50 @@ const ContributorPortal = () => {
                   {/* Left col: image */}
                   <div className="form-col">
                     <label>{t(lang, 'Upload Item Image', 'آئٹم کی تصویر اپ لوڈ کریں')} <span style={{ color: '#ef4444' }}>*</span></label>
-                    <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
-                      <input {...getInputProps()} />
-                      {file ? (
-                        <img src={file.preview} alt="Upload" className="drop-preview" />
-                      ) : (
-                        <div className="drop-placeholder">
-                          <UploadCloud size={40} className="text-primary" />
-                          <p>{t(lang, 'Drag & drop image here, or click to select', 'تصویر یہاں ڈریگ کریں یا منتخب کرنے کے لیے کلک کریں')}</p>
+                    {isCameraActive ? (
+                      <div className="camera-container" style={{ position: 'relative', width: '100%', minHeight: '260px', backgroundColor: '#000', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', maxHeight: '300px', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', bottom: '15px', left: '0', right: '0', display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                          <button 
+                            type="button"
+                            onClick={capturePhoto} 
+                            style={{ padding: '8px 16px', borderRadius: '30px', backgroundColor: '#10b981', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}
+                          >
+                            <Camera size={14} /> Capture Photo
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={stopCamera} 
+                            style={{ padding: '8px 16px', borderRadius: '30px', backgroundColor: '#ef4444', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239,68,68,0.3)', fontSize: '0.85rem' }}
+                          >
+                            Cancel
+                          </button>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
+                          <input {...getInputProps()} />
+                          {file ? (
+                            <img src={file.preview} alt="Upload" className="drop-preview" />
+                          ) : (
+                            <div className="drop-placeholder">
+                              <UploadCloud size={40} className="text-primary" />
+                              <p>{t(lang, 'Drag & drop image here, or click to select', 'تصویر یہاں ڈریگ کریں یا منتخب کرنے کے لیے کلک کریں')}</p>
+                            </div>
+                          )}
+                        </div>
+                        {!file && (
+                          <button 
+                            type="button"
+                            onClick={startCamera} 
+                            style={{ marginTop: '12px', width: '100%', padding: '10px 16px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.85rem' }}
+                          >
+                            <Camera size={16} /> Use Live Camera Instead
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Right col: fields */}
@@ -1439,7 +1627,7 @@ const ContributorPortal = () => {
               </div>
               <button
                 className="btn btn-outline"
-                onClick={() => fetchData()}
+                onClick={() => fetchData(true)}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600 }}
               >
                 <RefreshCw size={16} /> {t(lang, 'Refresh', 'تازہ کریں')}
@@ -1867,38 +2055,54 @@ const ContributorPortal = () => {
                       <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)' }}>
                         Provide a trust score review based on your pickup or interaction experience to prevent fraud and update organization trust score.
                       </p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          {[1, 2, 3, 4, 5].map(star => (
-                            <Star
-                              key={star}
-                              size={24}
-                              style={{ cursor: 'pointer', transition: 'all 0.15s' }}
-                              fill={(hoveredRating || selectedRating) >= star ? '#f59e0b' : 'none'}
-                              color={(hoveredRating || selectedRating) >= star ? '#f59e0b' : '#64748b'}
-                              onMouseEnter={() => setHoveredRating(star)}
-                              onMouseLeave={() => setHoveredRating(0)}
-                              onClick={() => setSelectedRating(star)}
-                            />
-                          ))}
-                        </div>
-                        <button
-                          className="btn btn-primary"
-                          style={{
-                            background: 'linear-gradient(to right, #f59e0b, #d97706)',
-                            borderColor: '#f59e0b',
-                            fontSize: '0.8rem',
-                            padding: '6px 14px',
-                            borderRadius: '10px',
-                            cursor: selectedRating === 0 || isSubmittingRating ? 'not-allowed' : 'pointer',
-                            opacity: selectedRating === 0 || isSubmittingRating ? 0.6 : 1
-                          }}
-                          disabled={selectedRating === 0 || isSubmittingRating}
-                          onClick={() => submitRating(selectedHistoryDonation._id)}
-                        >
-                          {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
-                        </button>
+                      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Star
+                            key={star}
+                            size={24}
+                            style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                            fill={(hoveredRating || selectedRating) >= star ? '#f59e0b' : 'none'}
+                            color={(hoveredRating || selectedRating) >= star ? '#f59e0b' : '#64748b'}
+                            onMouseEnter={() => setHoveredRating(star)}
+                            onMouseLeave={() => setHoveredRating(0)}
+                            onClick={() => setSelectedRating(star)}
+                          />
+                        ))}
                       </div>
+                      <textarea
+                        value={ratingComment}
+                        onChange={e => setRatingComment(e.target.value)}
+                        placeholder="Write a brief review about this exchange (e.g. was there any suspicious activity?)..."
+                        style={{
+                          width: '100%',
+                          minHeight: '60px',
+                          background: 'rgba(0,0,0,0.25)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          color: 'white',
+                          fontSize: '0.85rem',
+                          marginBottom: '10px',
+                          resize: 'vertical',
+                          outline: 'none'
+                        }}
+                      />
+                      <button
+                        className="btn btn-primary"
+                        style={{
+                          background: 'linear-gradient(to right, #f59e0b, #d97706)',
+                          borderColor: '#f59e0b',
+                          fontSize: '0.8rem',
+                          padding: '6px 14px',
+                          borderRadius: '10px',
+                          cursor: selectedRating === 0 || isSubmittingRating ? 'not-allowed' : 'pointer',
+                          opacity: selectedRating === 0 || isSubmittingRating ? 0.6 : 1
+                        }}
+                        disabled={selectedRating === 0 || isSubmittingRating}
+                        onClick={() => submitRating(selectedHistoryDonation._id)}
+                      >
+                        {isSubmittingRating ? 'Submitting...' : 'Submit Rating & Review'}
+                      </button>
                     </div>
                   )}
                 </div>

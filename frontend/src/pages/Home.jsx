@@ -49,35 +49,47 @@ const Home = () => {
         const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
           ? 'http://localhost:5000'
           : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
-        const res = await axios.get(`${API}/api/users/receivers`);
+        const langParam = lang === 'Eng' ? 'en' : 'ur';
+        const res = await axios.get(`${API}/api/users/receivers?lang=${langParam}`);
         setDbReceivers(res.data);
       } catch (err) {
         console.error("Failed to fetch receivers", err);
       }
     };
     fetchReceivers();
-  }, []);
+  }, [lang]);
 
-  const combinedOrgs = [
-    ...organizations,
-    ...dbReceivers.map(r => ({
-      id: r._id,
-      name: r.name,
-      type: r.orgType || 'NGO',
-      image: r.profileBanner || localStorage.getItem(`banner_${r._id}`) || 'https://images.pexels.com/photos/6995136/pexels-photo-6995136.jpeg',
-      logo: r.profilePic || logo1,
-      desc: r.bio || localStorage.getItem(`bio_${r._id}`) || `${r.name} is a verified organization on SpareShare AI, actively collecting and distributing donations across Pakistan.`,
-      city: r.city || localStorage.getItem(`city_${r._id}`) || 'Karachi',
-      tags: []
-    }))
-  ];
+  const dynamicOrgs = dbReceivers.map(r => ({
+    id: r._id,
+    name: r.name,
+    type: r.orgType || 'NGO',
+    image: r.profileBanner || localStorage.getItem(`banner_${r._id}`) || 'https://images.pexels.com/photos/6995136/pexels-photo-6995136.jpeg',
+    logo: r.profilePic || logo1,
+    desc: r.bio || localStorage.getItem(`bio_${r._id}`) || `${r.name} is a verified organization on SpareShare AI, actively collecting and distributing donations across Pakistan.`,
+    city: r.city || localStorage.getItem(`city_${r._id}`) || 'Karachi',
+    tags: [],
+    isDynamic: true
+  }));
 
-  const filteredOrgs = selectedCity === 'All'
-    ? combinedOrgs
-    : combinedOrgs.filter(org => org.city.toLowerCase().includes(selectedCity.toLowerCase()) || selectedCity.toLowerCase().includes(org.city.toLowerCase()));
+  const dynamicNgos = dynamicOrgs.filter(o => o.type === 'NGO' || o.type === 'Foundation');
+  const dynamicSocials = dynamicOrgs.filter(o => o.type === 'Social' || o.type === 'Instagram Page' || o.type === 'Community Group');
 
-  const ngos = filteredOrgs.filter(o => o.type === 'NGO' || o.type === 'Foundation');
-  const socialOrgs = filteredOrgs.filter(o => o.type === 'Social' || o.type === 'Instagram Page' || o.type === 'Community Group');
+  const staticNgos = organizations.filter(o => o.type === 'NGO' || o.type === 'Foundation').slice(0, 5);
+  const staticSocials = organizations.filter(o => o.type === 'Social' || o.type === 'Instagram Page' || o.type === 'Community Group').slice(0, 5);
+
+  const combinedNgos = [...dynamicNgos, ...staticNgos];
+  const combinedSocials = [...dynamicSocials, ...staticSocials];
+
+  const filteredNgos = selectedCity === 'All'
+    ? combinedNgos
+    : combinedNgos.filter(org => org.city.toLowerCase().includes(selectedCity.toLowerCase()) || selectedCity.toLowerCase().includes(org.city.toLowerCase()));
+
+  const filteredSocials = selectedCity === 'All'
+    ? combinedSocials
+    : combinedSocials.filter(org => org.city.toLowerCase().includes(selectedCity.toLowerCase()) || selectedCity.toLowerCase().includes(org.city.toLowerCase()));
+
+  const ngos = filteredNgos;
+  const socialOrgs = filteredSocials;
 
   return (
     <div className="home-wrapper">

@@ -21,12 +21,13 @@ const ProfilePage = ({ onClose }) => {
 
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [bio, setBio] = useState('');
-  const [city, setCity] = useState('');
-  const [profilePic, setProfilePic] = useState('');
-  const [address, setAddress] = useState('');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  const [bio, setBio] = useState(user?.bio || '');
+  const [city, setCity] = useState(user?.city || '');
+  const [profilePic, setProfilePic] = useState(user?.profilePic || '');
+  const [address, setAddress] = useState(user?.location?.address || '');
+  const [lat, setLat] = useState((user?.location?.lat !== undefined && user?.location?.lat !== null) ? user.location.lat : '');
+  const [lng, setLng] = useState((user?.location?.lng !== undefined && user?.location?.lng !== null) ? user.location.lng : '');
+  const [website, setWebsite] = useState(user?.website || '');
   const [avgRating, setAvgRating] = useState(user?.avgRating ?? null);
   const [ratingCount, setRatingCount] = useState(user?.ratingCount ?? 0);
 
@@ -44,8 +45,9 @@ const ProfilePage = ({ onClose }) => {
         setCity(u.city || '');
         setProfilePic(u.profilePic || '');
         setAddress(u.location?.address || '');
-        setLat(u.location?.lat || '');
-        setLng(u.location?.lng || '');
+        setLat((u.location?.lat !== undefined && u.location?.lat !== null) ? u.location.lat : '');
+        setLng((u.location?.lng !== undefined && u.location?.lng !== null) ? u.location.lng : '');
+        setWebsite(u.website || '');
         setAvgRating(u.avgRating);
         setRatingCount(u.ratingCount);
       } catch (err) {
@@ -67,7 +69,7 @@ const ProfilePage = ({ onClose }) => {
     setSaving(true);
     try {
       const res = await axios.put(`${API}/api/users/me`,
-        { name, phone, bio, city, profilePic, address, lat, lng },
+        { name, phone, bio, city, profilePic, address, lat, lng, website },
         { headers: { 'x-auth-token': localStorage.getItem('token') } }
       );
       // Update global context & local storage user details
@@ -215,6 +217,23 @@ const ProfilePage = ({ onClose }) => {
                   <p className="pp-value">{address || 'N/A'}</p>
                 )}
               </div>
+
+              {isReceiver && (
+                <div className="pp-field" style={{ gridColumn: 'span 2' }}>
+                  <label><Building2 size={14} /> Website Link</label>
+                  {editing ? (
+                    <input type="url" value={website} onChange={e => setWebsite(e.target.value)} className="pp-input" placeholder="e.g. https://www.yourorganisation.org" />
+                  ) : (
+                    <p className="pp-value">
+                      {website ? (
+                        <a href={website.startsWith('http') ? website : `https://${website}`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'underline' }}>
+                          {website}
+                        </a>
+                      ) : 'N/A'}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="pp-field">
                 <label><MapPin size={14} /> Latitude</label>

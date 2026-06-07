@@ -128,25 +128,19 @@ router.get('/me', authMiddleware, async (req, res) => {
 // PUT /api/users/me
 router.put('/me', authMiddleware, async (req, res) => {
   try {
-    const { name, phone, bio, city, profilePic, profileBanner, address, lat, lng } = req.body;
+    const { name, phone, bio, city, profilePic, profileBanner, address, lat, lng, website } = req.body;
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Validation during profile save: address, lat, and lng are required for receiver (NGO)
+    // Validation during profile save: address, lat, and lng are optional for receiver (NGO) during normal editing
     if (user.role === 'receiver') {
-      if (address === undefined || address === null || String(address).trim() === '') {
-        return res.status(400).json({ error: 'Full Street Address is required' });
-      }
-      if (lat === undefined || lat === null || lat === '' || isNaN(parseFloat(lat))) {
-        return res.status(400).json({ error: 'Latitude is required and must be a valid number' });
-      }
-      if (lng === undefined || lng === null || lng === '' || isNaN(parseFloat(lng))) {
-        return res.status(400).json({ error: 'Longitude is required and must be a valid number' });
-      }
+      const hasAddress = address !== undefined && address !== null && String(address).trim() !== '';
+      const hasLat = lat !== undefined && lat !== null && lat !== '' && !isNaN(parseFloat(lat));
+      const hasLng = lng !== undefined && lng !== null && lng !== '' && !isNaN(parseFloat(lng));
       user.location = {
-        lat: parseFloat(lat),
-        lng: parseFloat(lng),
-        address: String(address).trim()
+        lat: hasLat ? parseFloat(lat) : null,
+        lng: hasLng ? parseFloat(lng) : null,
+        address: hasAddress ? String(address).trim() : ''
       };
     } else {
       // Optional for donors
@@ -164,6 +158,7 @@ router.put('/me', authMiddleware, async (req, res) => {
     if (city !== undefined) user.city = city;
     if (profilePic !== undefined) user.profilePic = profilePic;
     if (profileBanner !== undefined) user.profileBanner = profileBanner;
+    if (website !== undefined) user.website = website;
     await user.save();
     const ratings = await getDynamicRatings(user._id, user.role);
     const updatedUser = { ...user.toObject(), ...ratings };

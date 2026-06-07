@@ -53,23 +53,64 @@ const AdminPortal = () => {
 
   const fetchAll = async () => {
     setLoading(true);
+    const config = getH();
+    let successCount = 0;
+    let failCount = 0;
+
     try {
-      const config = getH();
-      const [pend, users, dons, reps, statsRes] = await Promise.all([
-        axios.get(`${API}/api/users/pending`, config),
-        axios.get(`${API}/api/users/all`, config),
-        axios.get(`${API}/api/donations/all`, config),
-        axios.get(`${API}/api/reports`, config),
-        axios.get(`${API}/api/users/admin-stats`, config),
-      ]);
-      setPendingNGOs(pend.data);
-      setAllUsers(users.data);
-      setAllDonations(dons.data);
-      setAllReports(reps.data);
-      setStats(statsRes.data.stats);
-      setWeeklyData(statsRes.data.weeklyData || defaultWeeklyData);
-    } catch { showToast('Failed to load data.', 'error'); }
-    finally { setLoading(false); }
+      const res = await axios.get(`${API}/api/users/pending`, config);
+      setPendingNGOs(res.data);
+      successCount++;
+    } catch (err) {
+      console.error("Pending NGOs fetch failed:", err.message);
+      failCount++;
+    }
+
+    try {
+      const res = await axios.get(`${API}/api/users/all`, config);
+      setAllUsers(res.data);
+      successCount++;
+    } catch (err) {
+      console.error("All Users fetch failed:", err.message);
+      failCount++;
+    }
+
+    try {
+      const res = await axios.get(`${API}/api/donations/all`, config);
+      setAllDonations(res.data);
+      successCount++;
+    } catch (err) {
+      console.error("Donations fetch failed:", err.message);
+      failCount++;
+    }
+
+    try {
+      const res = await axios.get(`${API}/api/reports`, config);
+      setAllReports(res.data);
+      successCount++;
+    } catch (err) {
+      console.error("Reports fetch failed:", err.message);
+      failCount++;
+    }
+
+    try {
+      const res = await axios.get(`${API}/api/users/admin-stats`, config);
+      setStats(res.data.stats);
+      setWeeklyData(res.data.weeklyData || defaultWeeklyData);
+      successCount++;
+    } catch (err) {
+      console.error("Admin Stats fetch failed:", err.message);
+      failCount++;
+    }
+
+    setLoading(false);
+    if (failCount === 0) {
+      showToast('✅ All data refreshed successfully!');
+    } else if (successCount > 0) {
+      showToast(`⚠️ Refreshed ${successCount} feeds, ${failCount} failed.`, 'warning');
+    } else {
+      showToast('❌ All refresh requests failed.', 'error');
+    }
   };
 
   useEffect(() => { fetchAll(); }, []);
@@ -175,7 +216,7 @@ const AdminPortal = () => {
         </div>
         <nav className="admin-nav">
           {TABS.map(({ id, label, Icon, count }) => (
-            <button key={id} className={`admin-nav-item ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
+            <button key={id} className={`admin-nav-item ${activeTab === id ? 'active' : ''}`} onClick={() => { setActiveTab(id); fetchAll(); }}>
               <Icon size={18} /> {label}
               {count > 0 && <span className="nav-badge">{count}</span>}
             </button>

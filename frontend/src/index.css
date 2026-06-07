@@ -54,6 +54,10 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+html {
+  overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -358,4 +362,10 @@ select.input-field option {
   padding: 14px !important;
   font-size: 0.95rem !important;
   color-scheme: dark !important;
+}
+
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
 }

@@ -79,6 +79,21 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
   const [loading, setLoading] = useState(true);
   const [aiStats, setAiStats] = useState(null);
   const [useLeaflet, setUseLeaflet] = useState(false);
+  const [weatherCondition, setWeatherCondition] = useState('Rainy');
+
+  const haversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c * 10) / 10;
+  };
 
   // Filter based on status
   const isRejected = aiStatus === 'rejected';
@@ -250,18 +265,20 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         const address = item.location?.address || '';
         const requestsHtml = item.posts.map(p => `<li>"${p.title}"</li>`).join('');
 
+        let distance = item.distanceKm;
+        if (distance === undefined || distance === null || distance === 999999) {
+          distance = haversineDistance(userLat, userLng, rLat, rLng);
+        }
+        let travelTime = distance * 1.5;
+        if (weatherCondition === 'Rainy') {
+          travelTime = travelTime * 1.15;
+        }
+        travelTime = Math.max(2, Math.round(travelTime));
+
         const popupContent = `
-          <div style="font-family:Inter,sans-serif;padding:6px;max-width:200px;color:#0f172a;">
-            <strong style="color:#0f172a;font-size:0.95rem;display:block;margin-bottom:4px">Receiver: ${recName}</strong>
-            <div style="color:#64748b;font-size:0.75rem;">📍 ${item.distanceKm} km away</div>
-            ${address ? `<div style="color:#64748b;font-size:0.75rem;margin-top:2px;">🏠 Address: ${address}</div>` : ''}
-            <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
-              <div style="font-weight:600;font-size:0.75rem;color:#0f172a;">Requested Items:</div>
-              <ul style="margin:4px 0 0;padding-left:12px;font-size:0.75rem;color:#334155;">
-                ${requestsHtml}
-              </ul>
-            </div>
-            ${isRejected ? '<div style="color:#ef4444;font-size:0.75rem;margin-top:6px;font-weight:600;">❌ Item Rejected - Cannot donate</div>' : ''}
+          <div style="font-family:Inter,sans-serif;padding:6px;color:#0f172a;min-width:120px;">
+            <strong style="color:#0f172a;font-size:0.92rem;display:block;margin-bottom:4px">${recName}</strong>
+            <div style="color:#10b981;font-size:0.82rem;font-weight:700;">📍 ${distance} km away</div>
           </div>
         `;
         marker.bindPopup(popupContent);
@@ -272,6 +289,17 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         });
 
         leafletMarkersRef.current.push(marker);
+
+        // Draw green route line from donor to receiver
+        if (!isRejected) {
+          const polyline = L.polyline([[userLat, userLng], [rLat, rLng]], {
+            color: '#10b981',
+            weight: 3,
+            opacity: 0.7,
+            dashArray: '5, 10'
+          }).addTo(map);
+          leafletMarkersRef.current.push(polyline);
+        }
       });
 
       if (uniqueReceiversList.length > 0) {
@@ -338,24 +366,42 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
           const address = item.location?.address || '';
           const requestsHtml = item.posts.map(p => `<li>"${p.title}"</li>`).join('');
 
+          let distance = item.distanceKm;
+          if (distance === undefined || distance === null || distance === 999999) {
+            distance = haversineDistance(userLat, userLng, rLat, rLng);
+          }
+          let travelTime = distance * 1.5;
+          if (weatherCondition === 'Rainy') {
+            travelTime = travelTime * 1.15;
+          }
+          travelTime = Math.max(2, Math.round(travelTime));
+
           infoWindowRef.current.setContent(`
-            <div style="font-family:Inter,sans-serif;padding:6px;max-width:200px;color:#0f172a;">
-              <strong style="color:#0f172a;font-size:0.95rem;display:block;margin-bottom:4px">Receiver: ${recName}</strong>
-              <div style="color:#64748b;font-size:0.75rem;">📍 ${item.distanceKm} km away</div>
-              ${address ? `<div style="color:#64748b;font-size:0.75rem;margin-top:2px;">🏠 Address: ${address}</div>` : ''}
-              <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
-                <div style="font-weight:600;font-size:0.75rem;color:#0f172a;">Requested Items:</div>
-                <ul style="margin:4px 0 0;padding-left:12px;font-size:0.75rem;color:#334155;">
-                  ${requestsHtml}
-                </ul>
-              </div>
-              ${isRejected ? '<div style="color:#ef4444;font-size:0.75rem;margin-top:6px;font-weight:600;">❌ Item Rejected - Cannot donate</div>' : ''}
+            <div style="font-family:Inter,sans-serif;padding:6px;color:#0f172a;min-width:120px;">
+              <strong style="color:#0f172a;font-size:0.92rem;display:block;margin-bottom:4px">${recName}</strong>
+              <div style="color:#10b981;font-size:0.82rem;font-weight:700;">📍 ${distance} km away</div>
             </div>
           `);
           infoWindowRef.current.open(googleMapRef.current, marker);
         });
 
         markersRef.current.push(marker);
+
+        // Draw green route line from donor to receiver on Google Maps
+        if (!isRejected) {
+          const polyline = new maps.Polyline({
+            path: [
+              { lat: userLat, lng: userLng },
+              { lat: rLat, lng: rLng }
+            ],
+            geodesic: true,
+            strokeColor: '#10b981',
+            strokeOpacity: 0.7,
+            strokeWeight: 3
+          });
+          polyline.setMap(googleMapRef.current);
+          markersRef.current.push(polyline);
+        }
       });
 
       if (uniqueReceiversList.length > 0) {
@@ -384,6 +430,50 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
           {uniqueReceiverCount} suggested receiver{uniqueReceiverCount !== 1 ? 's' : ''}
         </span>
+      </div>
+      {category === 'Food' && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          borderBottom: '1px solid rgba(239, 68, 68, 0.15)',
+          padding: '12px 20px',
+          color: '#ef4444',
+          fontSize: '0.85rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />
+          <div>
+            <strong>AI Weather Restriction Enforced:</strong> High summer temperature (&gt;30°C) active. Prepared foods are strictly restricted to a <strong>2-hour delivery window</strong> and a <strong>20-minute safe travel limit</strong> to prevent spoilage.
+          </div>
+        </div>
+      )}
+
+      {/* Simulated Weather Controller */}
+      <div style={{ display: 'flex', gap: '8px', padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Simulated Weather:</span>
+        {[
+          { key: 'Sunny', label: '☀️ Sunny' },
+          { key: 'Rainy', label: '🌧️ Rainy / Delay (+15%)' }
+        ].map(cond => (
+          <button
+            key={cond.key}
+            onClick={() => setWeatherCondition(cond.key)}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '8px',
+              border: '1px solid ' + (weatherCondition === cond.key ? '#3b82f6' : '#e2e8f0'),
+              background: weatherCondition === cond.key ? '#eff6ff' : 'white',
+              color: weatherCondition === cond.key ? '#2563eb' : '#64748b',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}
+          >
+            {cond.label}
+          </button>
+        ))}
       </div>
 
       {aiStats && aiStats.temperature > 30 && category === 'Food' && (

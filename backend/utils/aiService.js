@@ -60,6 +60,7 @@ Respond ONLY in JSON:
 }
 `;
       } else if (category === 'Medicine') {
+        const currentDateStr = new Date().toISOString().split('T')[0];
         prompt = `
 You are a pharmaceutical safety inspector.
 
@@ -67,7 +68,7 @@ Analyze the image and determine:
 
 1. Is this a valid medicine product?
 2. Check packaging condition (sealed/open/damaged)
-3. Detect expiry date if visible
+3. Detect expiry date and manufacturing date if visible
 4. Identify medicine type (tablets, capsules, syrup, etc.)
 5. Evaluate if safe for donation (NOT food safety)
 
@@ -81,6 +82,8 @@ Return JSON:
 }
 
 IMPORTANT:
+- The actual current date is ${currentDateStr}. Use this date for any date comparisons.
+- Do NOT reject a medicine as "unverifiable" or "unsafe" due to its manufacturing date unless its manufacturing date is in the future (after ${currentDateStr}).
 - DO NOT mention food
 - DO NOT compare with food
 - Treat this ONLY as medicine

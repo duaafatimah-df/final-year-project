@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const Notification = require('../models/Notification');
 const Donation = require('../models/Donation');
 const User = require('../models/User');
+const aiService = require('../utils/aiService');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
@@ -22,10 +23,40 @@ const authMiddleware = (req, res, next) => {
 // ─── GET /api/notifications ────────────────────────────────────────────────
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const notifications = await Notification.find({ receiverId: req.user.userId })
+    const query = { receiverId: req.user.userId };
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+    let notifications = await Notification.find(query)
       .populate('donorId', 'name city profilePic email phone location')
       .populate('donationId')
       .sort({ createdAt: -1 });
+
+    const lang = req.query.lang || 'en';
+    if (lang === 'ur') {
+      notifications = await Promise.all(notifications.map(async (n) => {
+        try {
+          const trTitle = await aiService.translate(n.title, 'ur');
+          const trMsg = await aiService.translate(n.message, 'ur');
+          const nObj = n.toObject();
+          if (nObj.donationId) {
+            const trDonTitle = await aiService.translate(nObj.donationId.title, 'ur');
+            const trDonDesc = await aiService.translate(nObj.donationId.description, 'ur');
+            nObj.donationId.title = trDonTitle.translatedText;
+            nObj.donationId.description = trDonDesc.translatedText;
+          }
+          return {
+            ...nObj,
+            title: trTitle.translatedText,
+            message: trMsg.translatedText
+          };
+        } catch (trErr) {
+          console.warn("Notification translation failed:", trErr.message);
+          return n.toObject();
+        }
+      }));
+    }
+
     res.json(notifications);
   } catch (err) {
     console.error('Fetch Notifications Error:', err.message);
@@ -185,10 +216,40 @@ router.put('/:id/reject', authMiddleware, async (req, res) => {
 // ─── GET /api/notifications/donor ─ Donor own notification logs ───────────
 router.get('/donor', authMiddleware, async (req, res) => {
   try {
-    const notifications = await Notification.find({ donorId: req.user.userId })
+    const query = { donorId: req.user.userId };
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+    let notifications = await Notification.find(query)
       .populate('receiverId', 'name city profilePic email phone location bio')
       .populate('donationId')
       .sort({ updatedAt: -1 });
+
+    const lang = req.query.lang || 'en';
+    if (lang === 'ur') {
+      notifications = await Promise.all(notifications.map(async (n) => {
+        try {
+          const trTitle = await aiService.translate(n.title, 'ur');
+          const trMsg = await aiService.translate(n.message, 'ur');
+          const nObj = n.toObject();
+          if (nObj.donationId) {
+            const trDonTitle = await aiService.translate(nObj.donationId.title, 'ur');
+            const trDonDesc = await aiService.translate(nObj.donationId.description, 'ur');
+            nObj.donationId.title = trDonTitle.translatedText;
+            nObj.donationId.description = trDonDesc.translatedText;
+          }
+          return {
+            ...nObj,
+            title: trTitle.translatedText,
+            message: trMsg.translatedText
+          };
+        } catch (trErr) {
+          console.warn("Notification translation failed:", trErr.message);
+          return n.toObject();
+        }
+      }));
+    }
+
     res.json(notifications);
   } catch (err) {
     console.error('Fetch Donor Notifications Error:', err.message);

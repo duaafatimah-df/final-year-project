@@ -16,7 +16,7 @@ const authMiddleware = (req, res, next) => {
 // POST /api/ratings — Either receiver rates donor OR donor rates receiver
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { donationId, rating } = req.body;
+    const { donationId, rating, comment, feedback } = req.body;
     if (!donationId || rating == null) return res.status(400).json({ error: 'donationId and rating are required.' });
     if (rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
 
@@ -55,6 +55,21 @@ router.post('/', authMiddleware, async (req, res) => {
         }
       }
       await targetUser.save();
+
+      // Trigger NLP and multi-factor fraud detection
+      const { analyzeFraudRisk } = require('../utils/fraudAi');
+      const reviewComment = comment || feedback || '';
+      try {
+        await analyzeFraudRisk(
+          targetUser._id,
+          req.user.userId,
+          donation._id,
+          reviewComment,
+          rating
+        );
+      } catch (fraudErr) {
+        console.error('⚠️ Fraud analysis error (ignored for normal rating submission):', fraudErr.message);
+      }
     }
 
     res.json({ 

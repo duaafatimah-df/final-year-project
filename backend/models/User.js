@@ -30,6 +30,7 @@ const UserSchema = new mongoose.Schema({
   city:          { type: String, default: '' },
   profilePic:    { type: String, default: '' },
   profileBanner: { type: String, default: '' },
+  website:       { type: String, default: '' },
 
   // Notification preference (email-ready)
   emailNotifications: { type: Boolean, default: true },

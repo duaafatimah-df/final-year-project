@@ -105,6 +105,68 @@ const DonationWizard = () => {
   // Form & Wizard Step states
   const [step, setStep] = useState(1); // 1=Upload & Info, 2=Scanning, 3=Suggestions, 4=Success
   const [file, setFile] = useState(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    try {
+      setIsCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      streamRef.current = stream;
+      // Wait briefly for ref to be bound if state update is async
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Camera access failed:", err);
+      alert("Could not access camera. Please check permissions.");
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      fetch(dataUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const capturedFile = new File([blob], "camera_capture.jpg", { type: "image/jpeg" });
+          Object.assign(capturedFile, {
+            preview: dataUrl
+          });
+          setFile(capturedFile);
+          stopCamera();
+        });
+    }
+  };
   
   const [title, setTitle] = useState('');
   const [quantity, setQuantity] = useState('1 batch');
@@ -676,18 +738,51 @@ const DonationWizard = () => {
             </div>
 
             <div className="wizard-step">
-              <div {...getRootProps()} className={`upload-zone ${isDragActive ? 'active' : ''}`}>
-                <input {...getInputProps()} />
-                {file ? (
-                  <img src={file.preview} alt="Upload" className="upload-preview" />
-                ) : (
-                  <div className="upload-placeholder">
-                    <Camera size={44} style={{ color: '#10b981' }} />
-                    <h3>Click or Drag Image Here</h3>
-                    <p>Upload a clear photo of the items to donate.</p>
+              {isCameraActive ? (
+                <div className="camera-container" style={{ position: 'relative', width: '100%', minHeight: '300px', backgroundColor: '#000', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                  <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', maxHeight: '400px', objectFit: 'cover' }} />
+                  <div style={{ position: 'absolute', bottom: '20px', left: '0', right: '0', display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                    <button 
+                      type="button"
+                      onClick={capturePhoto} 
+                      style={{ padding: '10px 20px', borderRadius: '30px', backgroundColor: '#10b981', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Camera size={16} /> Capture Photo
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={stopCamera} 
+                      style={{ padding: '10px 20px', borderRadius: '30px', backgroundColor: '#ef4444', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239,68,68,0.3)' }}
+                    >
+                      Cancel
+                    </button>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <div {...getRootProps()} className={`upload-zone ${isDragActive ? 'active' : ''}`}>
+                    <input {...getInputProps()} />
+                    {file ? (
+                      <img src={file.preview} alt="Upload" className="upload-preview" />
+                    ) : (
+                      <div className="upload-placeholder">
+                        <Camera size={44} style={{ color: '#10b981' }} />
+                        <h3>Click or Drag Image Here</h3>
+                        <p>Upload a clear photo of the items to donate.</p>
+                      </div>
+                    )}
+                  </div>
+                  {!file && (
+                    <button 
+                      type="button"
+                      onClick={startCamera} 
+                      style={{ marginTop: '12px', width: '100%', padding: '12px 20px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '1.5rem' }}
+                    >
+                      <Camera size={18} /> Use Live Camera Instead
+                    </button>
+                  )}
+                </>
+              )}
 
               {file && (
                 <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left', marginBottom: '2rem' }}>
@@ -794,7 +889,7 @@ const DonationWizard = () => {
           <div style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
             <div style={{ width: 88, height: 88, border: '4px solid rgba(255,255,255,0.06)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 2.5rem', boxShadow: '0 0 30px rgba(16,185,129,0.2)' }} />
             <h2 style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '1.8rem', color: '#ffffff', marginBottom: '0.75rem' }}>SpareShare AI Scanning...</h2>
-            <p style={{ color: '#9ca3af', fontSize: '0.95rem' }}>Running Gemini classification &amp; freshness checks...</p>
+            <p style={{ color: '#9ca3af', fontSize: '0.95rem' }}>Running AI classification &amp; freshness checks...</p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '1.75rem', marginTop: '2.5rem', flexWrap: 'wrap' }}>
               {['Object Detection', 'Category Classification', 'Safety Analysis', 'Travel Path Match'].map((label, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399', fontSize: '0.85rem', fontWeight: 700 }}>

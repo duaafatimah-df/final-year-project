@@ -94,6 +94,7 @@
 }
 
 .portal-search {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -279,7 +280,7 @@
 }
 .org-card-content h3 { font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
 .org-location { color: var(--primary); font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
-.org-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; flex: 1; }
+.org-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* ── Islamic Cards ── */
 .islamic-cards-grid {
@@ -588,23 +589,8 @@
 
 /* ── Mobile Responsiveness Overrides ── */
 @media (max-width: 768px) {
-  .portal-header {
-    height: auto;
-    flex-wrap: wrap;
-    padding: 0.75rem 1rem;
-    gap: 0.75rem;
-  }
   .portal-logo span {
-    display: none; /* Hide text on mobile, keep logo icon only */
-  }
-  .portal-nav {
-    order: 3;
-    width: 100%;
-    margin-top: 0.25rem;
-    padding-bottom: 0.25rem;
-  }
-  .portal-actions {
-    margin-left: auto;
+    display: none;
   }
   .portal-search {
     padding: 5px 10px;
@@ -616,7 +602,9 @@
     padding: 1rem 1.25rem;
   }
   .portal-title {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+    word-wrap: break-word;
+    word-break: break-word;
   }
   .form-grid {
     grid-template-columns: 1fr;
@@ -639,6 +627,9 @@
   .nav-tab {
     padding: 5px 10px;
     font-size: 0.75rem;
+  }
+  .portal-title {
+    font-size: 1.15rem;
   }
 }
 

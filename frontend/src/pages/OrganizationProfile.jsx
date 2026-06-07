@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, MapPin, Share2, Globe, ShieldCheck, Camera, Check, Phone, Mail, Building2, Clock, AlertCircle, ChevronLeft, LogOut, Search, UserCircle } from 'lucide-react';
+import { Heart, MapPin, Share2, Globe, ShieldCheck, Camera, Check, Phone, Mail, Building2, Clock, AlertCircle, ChevronLeft, LogOut, Search, UserCircle, Star } from 'lucide-react';
 import { useAuth, useLang } from '../context/AuthContext';
 import { organizations } from './Home';
 import axios from 'axios';
@@ -99,6 +99,8 @@ const OrganizationProfile = () => {
       logo: staticOrg.logo,
       email: staticOrg.email || '',
       phone: staticOrg.phone || '',
+      website: staticOrg.website || '',
+      avgRating: staticOrg.avgRating || 4.8,
       isFromDb: false,
     }
     : dbOrg
@@ -111,6 +113,8 @@ const OrganizationProfile = () => {
         logo: dbOrg.profilePic || null,
         email: dbOrg.email || '',
         phone: dbOrg.phone || '',
+        website: dbOrg.website || '',
+        avgRating: dbOrg.avgRating !== undefined ? dbOrg.avgRating : null,
         isFromDb: true,
       }
       : null;
@@ -250,12 +254,20 @@ const OrganizationProfile = () => {
               )}
             </p>
 
-            <div className="org-contact-row">
-              {org.email && (<div className="org-contact-item"><Mail size={16} color="#10b981" /> {org.email}</div>)}
-              {org.phone && org.phone !== '+92 000 0000000' && (<div className="org-contact-item"><Phone size={16} color="#10b981" /> {org.phone}</div>)}
+            <div className="org-contact-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginTop: '1rem' }}>
+              {org.email && (<div className="org-contact-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Mail size={16} color="#10b981" /> {org.email}</div>)}
+              {org.phone && org.phone !== '+92 000 0000000' && (<div className="org-contact-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Phone size={16} color="#10b981" /> {org.phone}</div>)}
+              {org.website && (
+                <div className="org-contact-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Globe size={16} color="#10b981" />
+                  <a href={org.website.startsWith('http') ? org.website : `https://${org.website}`} target="_blank" rel="noopener noreferrer" style={{ color: '#10b981', textDecoration: 'underline', fontWeight: 600 }}>
+                    {org.website}
+                  </a>
+                </div>
+              )}
             </div>
 
-            <div className="org-verification" style={{ marginTop: '1.5rem' }}>
+            <div className="org-verification" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="verify-badge">
                 <ShieldCheck className="text-green" size={24} />
                 <div>
@@ -263,6 +275,19 @@ const OrganizationProfile = () => {
                   <p>{t(lang, 'Identity and operational status verified by SpareShare AI admins.', 'شناخت اور آپریشنل حیثیت SpareShare AI منتظمین نے تصدیق کی ہے۔')}</p>
                 </div>
               </div>
+              {org.avgRating !== null && (
+                <div className="verify-badge" style={{ background: 'rgba(245,158,11,0.06)', borderColor: 'rgba(245,158,11,0.2)', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(245,158,11,0.15)' }}>
+                  <Star className="text-yellow" size={24} fill="#f59e0b" color="#f59e0b" style={{ flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: '#f59e0b', fontSize: '0.95rem' }}>
+                      {Math.round(org.avgRating * 20)}% {t(lang, 'AI Trust Score', 'اے آئی ٹرسٹ اسکور')}
+                    </strong>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      {t(lang, 'Calculated based on verified platform feedback and ratings.', 'پلیٹ فارم کی تصدیق شدہ درجہ بندیوں اور آراء کی بنیاد پر حساب لگایا گیا۔')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -322,7 +347,13 @@ const OrganizationProfile = () => {
             <p>{t(lang, 'Select what you want to donate. Items will be verified by AI before delivery.', 'منتخب کریں کہ آپ کیا عطیہ کرنا چاہتے ہیں۔ ڈیلیوری سے پہلے اے آئی سے تصدیق ہوگی۔')}</p>
 
             <div className="impact-options">
-              {[t(lang, 'Food & Rations', 'خوراک اور راشن'), t(lang, 'Clothing', 'کپڑے'), t(lang, 'Medical Supplies', 'طبی سامان')].map(cat => (
+              {[
+                t(lang, 'Food & Rations', 'خوراک اور راشن'),
+                t(lang, 'Clothing', 'کپڑے'),
+                t(lang, 'Medical Supplies', 'طبی سامان'),
+                t(lang, 'Household Items', 'گھریلو سامان'),
+                t(lang, 'Grocery Items', 'کرانہ کی اشیاء')
+              ].map(cat => (
                 <div
                   key={cat}
                   className={`impact-btn ${selectedCategories.includes(cat) ? 'selected' : ''}`}

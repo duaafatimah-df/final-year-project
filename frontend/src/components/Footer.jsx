@@ -3,6 +3,25 @@ import { Mail, MapPin, Phone, Calendar as CalendarIcon } from 'lucide-react';
 import './Footer.css';
 
 const Footer = () => {
+  const getHijriDate = () => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      const parts = formatter.formatToParts(new Date());
+      const year = parts.find(p => p.type === 'year')?.value || '1447';
+      let month = parts.find(p => p.type === 'month')?.value || 'Shawwal';
+      month = month.replace('ʻ', "'").replace('’', "'");
+      return { year, month };
+    } catch (e) {
+      return { year: '1447', month: "Dhu'l-Hijjah" };
+    }
+  };
+
+  const { year, month } = getHijriDate();
+
   return (
     <footer className="footer-hope">
       <div className="container">
@@ -42,12 +61,12 @@ const Footer = () => {
             <div className="zakat-widget">
               <div className="zakat-header">
                 <CalendarIcon size={20} />
-                <span>Islamic Year 1447 AH</span>
+                <span>Islamic Year {year} AH</span>
               </div>
               <div className="zakat-body">
                 <div className="zakat-row">
                   <span>Current Month:</span>
-                  <strong>Shawwal</strong>
+                  <strong>{month}</strong>
                 </div>
                 <div className="zakat-row">
                   <span>Nisab Value (Gold):</span>

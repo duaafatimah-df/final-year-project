@@ -253,7 +253,7 @@ router.post('/', authMiddleware, async (req, res) => {
       if (aiSafetyScore >= 70) {
         finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'active';
       } else if (aiSafetyScore >= 50) {
-        finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'needs_review';
+        finalStatus = 'needs_review';
       } else {
         finalStatus = 'rejected';
       }
@@ -272,7 +272,7 @@ router.post('/', authMiddleware, async (req, res) => {
       if (aiSafetyScore >= 70) {
         finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'active';
       } else if (aiSafetyScore >= 50) {
-        finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'needs_review';
+        finalStatus = 'needs_review';
       } else {
         finalStatus = 'rejected';
       }
@@ -284,7 +284,14 @@ router.post('/', authMiddleware, async (req, res) => {
         const ocr = await aiService.extractExpiry(imageUrl);
         if (ocr.isValid) {
           aiAnalysisReason += ` | OCR Found Expiry: ${ocr.expiryDate}`;
+          if (ocr.mfgDate) {
+            aiAnalysisReason += `, MFG: ${ocr.mfgDate}`;
+          }
         } else {
+          // If it's a critical safety error, reject the donation
+          if (ocr.message && (ocr.message.includes('expired') || ocr.message.includes('future') || ocr.message.includes('before the manufacturing'))) {
+            return res.status(400).json({ error: `Medicine Safety Validation failed: ${ocr.message}` });
+          }
           aiSafetyScore -= 20;
           aiAnalysisReason += ` | OCR Warning: ${ocr.message || 'No date found'}`;
         }
@@ -445,9 +452,14 @@ router.get('/browse', optionalAuth, async (req, res) => {
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
       donations = await Promise.all(donations.map(async d => {
-        const trTitle = await aiService.translate(d.title, 'ur');
-        const trDesc = await aiService.translate(d.description, 'ur');
-        return { ...d._doc, title: trTitle.translatedText, description: trDesc.translatedText };
+        try {
+          const trTitle = await aiService.translate(d.title, 'ur');
+          const trDesc = await aiService.translate(d.description, 'ur');
+          return { ...d._doc, title: trTitle.translatedText, description: trDesc.translatedText };
+        } catch (trErr) {
+          console.warn("Donation browse translation failed:", trErr.message);
+          return d._doc || d;
+        }
       }));
     } else {
       donations = donations.map(d => d._doc ? d._doc : d);
@@ -511,9 +523,14 @@ router.get('/nearby', optionalAuth, async (req, res) => {
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
       donations = await Promise.all(donations.map(async d => {
-        const trTitle = await aiService.translate(d.title, 'ur');
-        const trDesc = await aiService.translate(d.description, 'ur');
-        return { ...d, title: trTitle.translatedText, description: trDesc.translatedText };
+        try {
+          const trTitle = await aiService.translate(d.title, 'ur');
+          const trDesc = await aiService.translate(d.description, 'ur');
+          return { ...d, title: trTitle.translatedText, description: trDesc.translatedText };
+        } catch (trErr) {
+          console.warn("Donation nearby translation failed:", trErr.message);
+          return d;
+        }
       }));
     }
 
@@ -619,9 +636,14 @@ router.get('/ai-matched', authMiddleware, async (req, res) => {
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
       const translated = await Promise.all(sortedDonations.map(async d => {
-        const trTitle = await aiService.translate(d.title, 'ur');
-        const trDesc = await aiService.translate(d.description, 'ur');
-        return { ...d, title: trTitle.translatedText, description: trDesc.translatedText };
+        try {
+          const trTitle = await aiService.translate(d.title, 'ur');
+          const trDesc = await aiService.translate(d.description, 'ur');
+          return { ...d, title: trTitle.translatedText, description: trDesc.translatedText };
+        } catch (trErr) {
+          console.warn("Donation ai-matched translation failed:", trErr.message);
+          return d;
+        }
       }));
       res.json(translated);
     } else {

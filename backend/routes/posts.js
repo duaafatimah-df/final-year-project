@@ -81,7 +81,23 @@ router.post('/', authMiddleware, async (req, res) => {
 // Get posts for a specific receiver
 router.get('/my-posts', authMiddleware, async (req, res) => {
   try {
-    const posts = await Post.find({ receiverId: req.user.userId }).sort({ createdAt: -1 });
+    let posts = await Post.find({ receiverId: req.user.userId }).sort({ createdAt: -1 });
+
+    const lang = req.query.lang || 'en';
+    if (lang === 'ur') {
+      posts = await Promise.all(posts.map(async p => {
+        try {
+          const trTitle = await aiService.translate(p.title, 'ur');
+          const trDesc = await aiService.translate(p.desc, 'ur');
+          const pObj = p.toObject();
+          return { ...pObj, title: trTitle.translatedText, desc: trDesc.translatedText };
+        } catch (trErr) {
+          console.warn("Post translation failed:", trErr.message);
+          return p.toObject();
+        }
+      }));
+    }
+
     res.json(posts);
   } catch (err) {
     res.status(500).send('Server Error');
@@ -91,9 +107,25 @@ router.get('/my-posts', authMiddleware, async (req, res) => {
 // Get all active posts (for donors to view)
 router.get('/active', async (req, res) => {
   try {
-    const posts = await Post.find({ status: { $ne: 'Fulfilled' } })
+    let posts = await Post.find({ status: { $ne: 'Fulfilled' } })
       .populate('receiverId', 'name email phone')
       .sort({ createdAt: -1 });
+
+    const lang = req.query.lang || 'en';
+    if (lang === 'ur') {
+      posts = await Promise.all(posts.map(async p => {
+        try {
+          const trTitle = await aiService.translate(p.title, 'ur');
+          const trDesc = await aiService.translate(p.desc, 'ur');
+          const pObj = p.toObject();
+          return { ...pObj, title: trTitle.translatedText, desc: trDesc.translatedText };
+        } catch (trErr) {
+          console.warn("Post translation failed:", trErr.message);
+          return p.toObject();
+        }
+      }));
+    }
+
     res.json(posts);
   } catch (err) {
     res.status(500).send('Server Error');
@@ -170,6 +202,21 @@ router.get('/nearby', async (req, res) => {
         return p.distanceKm <= itemMax;
       })
       .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    // Translation Integration
+    const lang = req.query.lang || 'en';
+    if (lang === 'ur') {
+      posts = await Promise.all(posts.map(async p => {
+        try {
+          const trTitle = await aiService.translate(p.title, 'ur');
+          const trDesc = await aiService.translate(p.desc || p.description, 'ur');
+          return { ...p, title: trTitle.translatedText, desc: trDesc.translatedText };
+        } catch (trErr) {
+          console.warn("Nearby post translation failed:", trErr.message);
+          return p;
+        }
+      }));
+    }
 
     res.json({
       receivers: posts,
