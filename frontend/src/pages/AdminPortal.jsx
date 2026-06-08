@@ -242,8 +242,10 @@ const AdminPortal = () => {
         {activeTab === 'dashboard' && (
           <div className="admin-content animate-fade-in">
             <div className="admin-page-header">
-              <h1>Admin Dashboard</h1>
-              <p>Monitor platform health and donation activity.</p>
+              <div>
+                <h1>Admin Dashboard</h1>
+                <p>Monitor platform health and donation activity.</p>
+              </div>
             </div>
             <div className="admin-stats-grid">
               {[

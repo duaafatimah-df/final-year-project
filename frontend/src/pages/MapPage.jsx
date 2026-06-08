@@ -33,6 +33,28 @@ function getTimeLeft(expiryTime) {
 function loadGoogleMaps(apiKey) {
   return new Promise((resolve, reject) => {
     if (window.google?.maps) { resolve(window.google.maps); return; }
+    
+    // Check if script is already present in DOM (i.e. currently loading)
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      const checkInterval = setInterval(() => {
+        if (window.google && window.google.maps) {
+          clearInterval(checkInterval);
+          resolve(window.google.maps);
+        }
+      }, 100);
+      
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (window.google && window.google.maps) {
+          resolve(window.google.maps);
+        } else {
+          reject(new Error('Google Maps script loading timed out'));
+        }
+      }, 10000);
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;

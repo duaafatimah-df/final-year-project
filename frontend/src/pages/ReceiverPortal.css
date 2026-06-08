@@ -540,3 +540,89 @@
   }
 }
 
+/* Responsive donor details and AI analysis grids inside modals */
+.modal-donor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.modal-donor-grid .grid-span-2 {
+  grid-column: 1 / -1;
+}
+
+.modal-ai-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+/* Incoming Card List Styling */
+.rp-incoming-card-content {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rp-incoming-card-info {
+  flex: 1;
+  min-width: 180px;
+}
+
+.rp-incoming-card-info-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.rp-incoming-card-score {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rp-incoming-card-content .badge-verified,
+.rp-incoming-card-content .verified-badge,
+.rp-incoming-card-content span {
+  white-space: nowrap;
+}
+
+@media (max-width: 580px) {
+  .modal-donor-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-ai-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rp-incoming-card-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  
+  .rp-incoming-card-info {
+    min-width: unset;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .rp-incoming-card-info-header {
+    justify-content: center;
+  }
+  
+  .rp-incoming-card-content button.btn,
+  .rp-incoming-card-content .btn {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+

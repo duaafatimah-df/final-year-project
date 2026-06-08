@@ -125,6 +125,113 @@
   color: rgba(255,255,255,0.65);
 }
 
+.hamburger-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.hamburger-btn:hover {
+  opacity: 0.8;
+}
+
+.hide-on-mobile-flex {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Mobile drawer styling */
+.mobile-drawer {
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 15, 26, 0.98);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 1.5rem;
+  gap: 1.5rem;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 998;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+  animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mobile-drawer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mobile-drawer-link {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.mobile-drawer-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.mobile-drawer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 1.25rem;
+}
+
+.mobile-drawer-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 99px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-drawer-user {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.mobile-user-greeting {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  text-align: center;
+}
+
 /* Mobile responsive styles */
 @media (max-width: 768px) {
   .nav-container {
@@ -134,7 +241,13 @@
     justify-content: space-between;
   }
   .nav-links {
-    display: none; /* Hide desktop link tags to prevent squishing */
+    display: none !important;
+  }
+  .hide-on-mobile-flex {
+    display: none !important;
+  }
+  .hamburger-btn {
+    display: flex;
   }
   .logo-text {
     font-size: 0.95rem;
@@ -146,15 +259,8 @@
   .nav-actions {
     gap: 0.35rem;
   }
-  .nav-btn {
-    padding: 6px 12px;
-    font-size: 0.75rem;
-  }
   .lang-btn {
     font-size: 0.8rem !important;
-  }
-  .user-greeting {
-    display: none; /* Hide greeting to save space */
   }
 }
 

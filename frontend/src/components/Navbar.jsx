@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, useLang } from '../context/AuthContext';
-import { ArrowRight, LogOut, LayoutDashboard, Globe } from 'lucide-react';
+import { ArrowRight, LogOut, LayoutDashboard, Globe, Menu, X } from 'lucide-react';
 import './Navbar.css';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <nav className="navbar">
@@ -19,11 +21,11 @@ const Navbar = () => {
         <div className="nav-links">
           <Link to="/" className="nav-link">{t('Explore', 'تلاش کریں')}</Link>
           <Link to="/about" className="nav-link">{t('About', 'ہمارے بارے میں')}</Link>
-          <Link to="/zakat" className="nav-link text-green-accent">{t('Zakat Calculator', 'زکوٰۃ کیلکولیٹر')}</Link>
+          <Link to="/zakat" className="nav-link text-green-accent">{t('Zakat Calendar', 'زکوٰۃ کیلکولیٹر')}</Link>
         </div>
 
         <div className="nav-actions">
-          <div className="lang-dropdown-wrapper" style={{ position: 'relative', marginRight: '1rem' }} onClick={(e) => {
+          <div className="lang-dropdown-wrapper" style={{ position: 'relative', marginRight: '0.5rem' }} onClick={(e) => {
             const menu = document.getElementById('navbar-lang-menu');
             if (menu) menu.classList.toggle('open');
             e.stopPropagation();
@@ -76,31 +78,75 @@ const Navbar = () => {
             </div>
           </div>
 
-          {!user ? (
-            <>
-              <Link to="/auth/donor" className="nav-btn nav-btn-outline">
-                {t('Donor Login', 'ڈونر لاگ ان')} <ArrowRight size={15} />
-              </Link>
-              <Link to="/auth/receiver" className="nav-btn nav-btn-solid">
-                {t('Receiver Signup', 'وصول کنندہ سائن اپ')} <ArrowRight size={15} />
-              </Link>
-            </>
-          ) : (
-            <div className="user-menu">
-              <span className="user-greeting">{t('Hi', 'سلام')}, {user.name?.split(' ')[0]}</span>
-              <button
-                onClick={() => navigate(user.role === 'donor' ? '/contributor' : user.role === 'admin' ? '/admin' : '/receiver')}
-                className="nav-btn nav-btn-outline"
-              >
-                <LayoutDashboard size={15} /> {t('Dashboard', 'ڈیش بورڈ')}
-              </button>
-              <button onClick={logout} className="nav-btn" style={{ color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '7px 14px' }}>
-                <LogOut size={15} />
-              </button>
-            </div>
-          )}
+          <div className="hide-on-mobile-flex">
+            {!user ? (
+              <>
+                <Link to="/auth/donor" className="nav-btn nav-btn-outline">
+                  {t('Donor Login', 'ڈونر لاگ ان')} <ArrowRight size={15} />
+                </Link>
+                <Link to="/auth/receiver" className="nav-btn nav-btn-solid">
+                  {t('Receiver Signup', 'وصول کنندہ سائن اپ')} <ArrowRight size={15} />
+                </Link>
+              </>
+            ) : (
+              <div className="user-menu">
+                <span className="user-greeting">{t('Hi', 'سلام')}, {user.name?.split(' ')[0]}</span>
+                <button
+                  onClick={() => navigate(user.role === 'donor' ? '/contributor' : user.role === 'admin' ? '/admin' : '/receiver')}
+                  className="nav-btn nav-btn-outline"
+                >
+                  <LayoutDashboard size={15} /> {t('Dashboard', 'ڈیش بورڈ')}
+                </button>
+                <button onClick={logout} className="nav-btn" style={{ color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '7px 14px' }}>
+                  <LogOut size={15} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button className="hamburger-btn" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle Navigation">
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
       </div>
+
+      {mobileMenuOpen && (
+        <div className="mobile-drawer">
+          <div className="mobile-drawer-links">
+            <Link to="/" className="mobile-drawer-link" onClick={() => setMobileMenuOpen(false)}>{t('Explore', 'تلاش کریں')}</Link>
+            <Link to="/about" className="mobile-drawer-link" onClick={() => setMobileMenuOpen(false)}>{t('About', 'ہمارے بارے میں')}</Link>
+            <Link to="/zakat" className="mobile-drawer-link text-green-accent" onClick={() => setMobileMenuOpen(false)}>{t('Zakat Calendar', 'زکوٰۃ کیلکولیٹر')}</Link>
+          </div>
+          <div className="mobile-drawer-actions">
+            {!user ? (
+              <>
+                <Link to="/auth/donor" className="mobile-drawer-btn nav-btn-outline" onClick={() => setMobileMenuOpen(false)}>
+                  {t('Donor Login', 'ڈونر لاگ ان')} <ArrowRight size={14} />
+                </Link>
+                <Link to="/auth/receiver" className="mobile-drawer-btn nav-btn-solid" onClick={() => setMobileMenuOpen(false)}>
+                  {t('Receiver Signup', 'وصول کنندہ سائن اپ')} <ArrowRight size={14} />
+                </Link>
+              </>
+            ) : (
+              <div className="mobile-drawer-user">
+                <span className="mobile-user-greeting">{t('Hi', 'سلام')}, {user.name?.split(' ')[0]}</span>
+                <button
+                  onClick={() => {
+                    navigate(user.role === 'donor' ? '/contributor' : user.role === 'admin' ? '/admin' : '/receiver');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="mobile-drawer-btn nav-btn-outline"
+                >
+                  <LayoutDashboard size={14} /> {t('Dashboard', 'ڈیش بورڈ')}
+                </button>
+                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="mobile-drawer-btn" style={{ color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '99px', width: '100%', fontWeight: 700 }}>
+                  <LogOut size={14} /> {t('Logout', 'لاگ آؤٹ')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };

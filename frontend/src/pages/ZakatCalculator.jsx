@@ -171,12 +171,12 @@ const ZakatCalculator = ({ onDonate }) => {
         </div>
 
         {/* Quranic Verses & Hadiths Section */}
-        <div className="charity-wisdom-section glass-panel" style={{ marginTop: '3rem', padding: '2.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+        <div className="charity-wisdom-section glass-panel">
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)', textAlign: 'center', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
             ✨ {t(lang, 'Virtues of Charity & Zakat', 'صدقہ اور زکوٰۃ کی فضیلت')}
           </h3>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+          <div className="wisdom-cards-grid">
             {/* Verse 1 */}
             <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <span style={{ fontSize: '1.5rem', alignSelf: 'center' }}>📖</span>

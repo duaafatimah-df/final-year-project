@@ -7,7 +7,7 @@ import {
   RefreshCw, ArrowRight,
   LogOut, Search, Globe, Home, Activity, Calculator,
   UploadCloud, MapPin, ScanLine, Sun, Clock, Send, ShieldCheck,
-  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star, Camera
+  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star, Camera, Menu
 } from "lucide-react";
 import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
@@ -578,6 +578,7 @@ const ContributorPortal = () => {
       )}
 
       {/* Portal Custom Header */}
+      {/* Portal Custom Header */}
       <header className="portal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="portal-logo" onClick={() => navigate('/')}>
           <img src="/logo.png" alt="SpareShare" />
@@ -709,8 +710,6 @@ const ContributorPortal = () => {
           </button>
         </div>
       </header>
-
-      {/* Mobile Drawer Menu */}
 
 
       {/* Profile Slide-in Panel */}

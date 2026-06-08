@@ -513,25 +513,7 @@ select.input-field option { background: var(--bg-card); }
   background: rgba(255,255,255,0.08);
 }
 
-@media (max-width: 768px) {
-  .mobile-menu-toggle {
-    display: block;
-  }
-  .portal-nav {
-    display: none !important;
-  }
-  .portal-actions {
-    display: none !important;
-  }
-  .portal-header {
-    height: 62px !important;
-    flex-wrap: nowrap !important;
-    justify-content: space-between !important;
-  }
-  .hide-mobile {
-    display: none !important;
-  }
-}
+
 
 .mobile-drawer-overlay {
   position: fixed;

@@ -703,16 +703,16 @@
   .organizations-section {
     padding: 15px 1.5px;
   }
-}
-
-@media (max-width: 640px) {
 
   .hiw-grid,
   .impact-grid,
   .org-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
     gap: 1.5rem;
   }
+}
+
+@media (max-width: 640px) {
 
   .hero-stats {
     display: grid;

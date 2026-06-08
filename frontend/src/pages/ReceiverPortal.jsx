@@ -7,7 +7,7 @@ import {
   LogOut, Search, Globe, Building2, List, BellRing,
   ShieldCheck, Phone, Mail, UserCircle, MapPin, Check, X, Camera,
   Activity, ScanLine, Clock, ArrowRight, CheckCircle2, XCircle, Trash2, Star,
-  RefreshCw
+  RefreshCw, Menu
 } from 'lucide-react';
 import ProfilePage from '../components/ProfilePage';
 import CustomDropdown from '../components/CustomDropdown';
@@ -501,7 +501,7 @@ const ReceiverPortal = () => {
     } catch (err) { console.error(err); }
   };
 
-  const filteredDonors = [...realDonors, ...mockDonors.slice(0, 2)].filter(donor => {
+  const filteredDonors = realDonors.filter(donor => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -602,8 +602,6 @@ const ReceiverPortal = () => {
           <img src="/logo.png" alt="SpareShare" />
           <span>Receiver Portal</span>
         </div>
-
-
 
         <nav className="portal-nav">
           <button className={`nav-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => { setActiveTab('profile'); fetchData(); }}>
@@ -736,8 +734,6 @@ const ReceiverPortal = () => {
           </button>
         </div>
       </header>
-
-      {/* Mobile Drawer Menu */}
 
 
       {/* Profile Slide-in Panel */}
@@ -1229,7 +1225,7 @@ const ReceiverPortal = () => {
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1.5rem', padding: '1.25rem 1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="rp-incoming-card-content">
                       {/* Donation image */}
                       <div 
                         style={{ position: 'relative', flexShrink: 0, cursor: req.imageUrl ? 'zoom-in' : 'default' }}
@@ -1256,22 +1252,22 @@ const ReceiverPortal = () => {
                       </div>
 
                       {/* Donor info */}
-                      <div style={{ flex: 1, minWidth: 180 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                      <div className="rp-incoming-card-info">
+                        <div className="rp-incoming-card-info-header">
                           {req.donorId?.profilePic ? (
                             <img src={req.donorId.profilePic} alt={req.donorId.name} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
                           ) : (
                             <UserCircle size={20} color="#10b981" />
                           )}
                           <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{req.donorId?.name || 'Anonymous Donor'}</span>
-                          <span style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.2)' }}>Verified Donor</span>
+                          <span style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.2)', whiteSpace: 'nowrap' }}>Verified Donor</span>
                         </div>
                         <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-main)', marginBottom: '4px' }}>{req.title}</p>
                         <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Category: <span style={{ color: '#10b981', fontWeight: 600 }}>{req.category || req.aiDetectedItems}</span></p>
                       </div>
 
                       {/* AI score */}
-                      <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                      <div className="rp-incoming-card-score">
                         <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #064e3b, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
                           <span style={{ color: 'white', fontWeight: 800, fontSize: '0.9rem' }}>{req.aiSafetyScore}%</span>
                         </div>
@@ -1301,7 +1297,7 @@ const ReceiverPortal = () => {
         )}
         {activeTab === 'ai_matches' && (
           <div className="receiver-ai-view animate-fade-in">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
               <h2 className="section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <ScanLine className="animate-pulse" style={{ color: '#8b5cf6' }} />
                 <span>AI Recommendation Engine</span>
@@ -1512,17 +1508,17 @@ const ReceiverPortal = () => {
                   </div>
                   <div style={{ flex: 1 }}>
                     <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'white' }}>{selectedRequest.donorId?.name || 'Anonymous Donor'}</h3>
-                    <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.2)' }}>✓ SpareShare Verified</span>
+                    <span style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.2)', whiteSpace: 'nowrap' }}>✓ SpareShare Verified</span>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem' }}>
+                <div className="modal-donor-grid" style={{ gap: '0.75rem', marginTop: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem', wordBreak: 'break-all' }}>
                     <Mail size={16} color="#10b981" /> {selectedRequest.donorId?.email || 'N/A'}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem', wordBreak: 'break-all' }}>
                     <Phone size={16} color="#10b981" /> {selectedRequest.donorId?.phone || 'Not provided'}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem', gridColumn: 'span 2' }}>
+                  <div className="grid-span-2" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.85)', fontSize: '0.9rem' }}>
                     <MapPin size={16} color="#10b981" /> <span><strong>Address:</strong> {selectedRequest.donorId?.location?.address || selectedRequest.donorId?.city || 'Not provided'}</span>
                   </div>
                 </div>
@@ -1563,7 +1559,7 @@ const ReceiverPortal = () => {
                   <Activity size={18} color="#10b981" />
                   <p style={{ color: 'white', margin: 0, fontWeight: 700 }}>SpareShare AI Analysis</p>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '0.75rem' }}>
+                <div className="modal-ai-grid">
                   <div style={{ background: '#1e293b', borderRadius: 10, padding: '0.9rem', textAlign: 'center', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
                     <p style={{ color: '#94a3b8', fontSize: '0.7rem', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Safety Score</p>
                     <p style={{ color: '#10b981', fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>{selectedRequest.aiSafetyScore}%</p>
@@ -1920,14 +1916,14 @@ const ReceiverPortal = () => {
                   </div>
                   <div>
                     <h4 style={{ margin: 0, color: 'white', fontSize: '0.95rem', fontWeight: 700 }}>{selectedCompletedDonation.donorId?.name || 'Anonymous Donor'}</h4>
-                    <span style={{ color: '#60a5fa', fontSize: '0.75rem', fontWeight: 600 }}>Verified Donor</span>
+                    <span style={{ color: '#60a5fa', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Verified Donor</span>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.85)' }}>
-                  <div><strong style={{ color: 'var(--text-dim)' }}>Email:</strong> {selectedCompletedDonation.donorId?.email || 'N/A'}</div>
-                  <div><strong style={{ color: 'var(--text-dim)' }}>Phone:</strong> {selectedCompletedDonation.donorId?.phone || 'N/A'}</div>
-                  <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'var(--text-dim)' }}>City:</strong> {selectedCompletedDonation.donorId?.city || 'Pakistan'}</div>
+                <div className="modal-donor-grid" style={{ gap: '10px', fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.85)' }}>
+                  <div style={{ wordBreak: 'break-all' }}><strong style={{ color: 'var(--text-dim)' }}>Email:</strong> {selectedCompletedDonation.donorId?.email || 'N/A'}</div>
+                  <div style={{ wordBreak: 'break-all' }}><strong style={{ color: 'var(--text-dim)' }}>Phone:</strong> {selectedCompletedDonation.donorId?.phone || 'N/A'}</div>
+                  <div className="grid-span-2"><strong style={{ color: 'var(--text-dim)' }}>City:</strong> {selectedCompletedDonation.donorId?.city || 'Pakistan'}</div>
                 </div>
               </div>
 
