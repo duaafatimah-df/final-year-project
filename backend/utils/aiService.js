@@ -197,15 +197,27 @@ RULES:
       };
 
     } catch (err) {
-      console.error('❌ Gemini analyzeItem FAILED:', err.message);
-      // Fallback ONLY when API/JSON fails
-      return {
-        status: "needs_review",
-        safetyScore: 55,
-        reason: "AI service error — manual review required",
-        keywords: [],
-        classifiedCategory: cleanToStandardCategory(category || 'Other')
-      };
+      console.error('❌ Gemini analyzeItem FAILED, switching to MobileNetV2 Fallback:', err.message);
+      try {
+        const response = await axios.post(`${AI_URL}/analyze-food`, { imageBase64 });
+        const fallbackData = response.data;
+        return {
+          status: fallbackData.status,
+          safetyScore: fallbackData.safetyScore,
+          reason: `[Local Fallback Model MobileNetV2]: ${fallbackData.reason}`,
+          keywords: fallbackData.detectedClasses || [],
+          classifiedCategory: cleanToStandardCategory(category || 'Other')
+        };
+      } catch (fallbackErr) {
+        console.error('❌ Local MobileNetV2 Fallback FAILED:', fallbackErr.message);
+        return {
+          status: "needs_review",
+          safetyScore: 55,
+          reason: "AI service error — manual review required",
+          keywords: [],
+          classifiedCategory: cleanToStandardCategory(category || 'Other')
+        };
+      }
     }
   },
 

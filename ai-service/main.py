@@ -84,12 +84,22 @@ def analyze_food_image(req: ImageAnalysisRequest):
     try:
         pil_image = decode_image(req.imageBase64)
         
-        # 1. Image Pre-processing
+        # 1. MobileNetV2 Feature Classification
+        resized_img = pil_image.resize((224, 224))
+        img_array = np.array(resized_img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = preprocess_input(img_array)
+        
+        preds = mobilenet_model.predict(img_array)
+        decoded = decode_predictions(preds, top=3)[0] # List of (class_id, class_name, prob)
+        detected_labels = [label[1].replace('_', ' ') for label in decoded]
+        
+        # 2. Image Pre-processing for decay features (OpenCV)
         open_cv_image = np.array(pil_image)[:, :, ::-1].copy()
         hsv_img = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2HSV)
         gray_img = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
         
-        # 2. Dark/Brown/Black spots detection (Decay ratio)
+        # Dark/Brown/Black spots detection (Decay ratio)
         lower_brown = np.array([10, 50, 20])
         upper_brown = np.array([30, 255, 200])
         lower_black = np.array([0, 0, 0])
@@ -103,50 +113,29 @@ def analyze_food_image(req: ImageAnalysisRequest):
         total_pixels = open_cv_image.shape[0] * open_cv_image.shape[1]
         dark_spots = min(1.0, rotten_pixels / total_pixels)
         
-        # 3. Texture degradation (Laplacian variance)
+        # Texture degradation (Laplacian variance)
         texture_variance = cv2.Laplacian(gray_img, cv2.CV_64F).var()
         
-        # 4. Color uniformity (Inverse of Hue StdDev)
-        # We calculate standard deviation of Hue channel. 
-        # Max theoretical std dev for hue (0-180) is ~90. 
-        hue_channel = hsv_img[:, :, 0]
-        hue_std = np.std(hue_channel)
-        # Normalize to 0-1 (1 = highly uniform, 0 = highly erratic)
-        color_uniformity = max(0.0, 1.0 - (hue_std / 90.0))
-        
-        # 5. CORE AI LOGIC (SIMPLE & DEMO-FRIENDLY)
-        # We only care about obvious spoilage
-        
-        # If dark spots VERY high AND texture VERY low -> Rejected
-        if dark_spots > 0.60 and texture_variance < 20:
+        # 3. Decision Logic for Fallback
+        if dark_spots > 0.50 and texture_variance < 25:
             status = "rejected"
-            safety_score = 45.0
-        # If moderate signals -> Needs Review
-        elif dark_spots > 0.30 or texture_variance < 50:
+            safety_score = 40.0
+        elif dark_spots > 0.25 or texture_variance < 60:
             status = "needs_review"
-            safety_score = 65.0
+            safety_score = 60.0
         else:
-            status = "active"
-            # Keep score in reasonable range (75-90)
-            safety_score = 75.0 + ((1.0 - dark_spots) * 15.0)
-
-        confidence = round(safety_score / 100.0, 2)
-        
-        reason = f"Detected {round(dark_spots*100)}% dark spots, texture var {round(texture_variance)}."
+            status = "approved"
+            safety_score = 80.0 + ((1.0 - dark_spots) * 15.0)
+            
+        reason = f"MobileNetV2 detected '{', '.join(detected_labels[:2])}'. Decay ratio: {round(dark_spots*100)}%, texture score: {round(texture_variance)}."
         
         result = {
             "status": status,
             "safetyScore": round(safety_score),
-            "confidence": confidence,
             "reason": reason,
-            "detectedClasses": ["Universal Food Item"], # Removed item-specific mobile-net logic
-            "metrics": {
-                "darkSpots": round(dark_spots, 3),
-                "textureVariance": round(texture_variance, 2),
-                "colorUniformity": round(color_uniformity, 2)
-            }
+            "detectedClasses": detected_labels
         }
-        print("AI ANALYSIS:", result)
+        print("MOBILE-NET FALLBACK RESULT:", result)
         return result
         
     except Exception as e:
