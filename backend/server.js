@@ -16,12 +16,23 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ─── MongoDB Connection ────────────────────────────────────────────────────
-mongoose.connect(process.env.MONGO_URI).then(() => {
-  console.log('✅ Connected to MongoDB Atlas (SpareShare AI)');
-}).catch(err => {
-  console.error('❌ MongoDB connection error:', err);
-});
+// ─── MongoDB Connection Middleware ──────────────────────────────────────────
+const connectDB = async (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+  try {
+    console.log('🔄 Connecting to MongoDB Atlas (Serverless Warmup)...');
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('✅ Connected to MongoDB Atlas (SpareShare AI)');
+    next();
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    res.status(500).json({ error: 'Database connection failed', details: err.message });
+  }
+};
+
+app.use(connectDB);
 
 // ─── Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
