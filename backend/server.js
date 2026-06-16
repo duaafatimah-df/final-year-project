@@ -62,6 +62,10 @@ cron.schedule('*/15 * * * *', async () => {
 console.log('⏰ Auto-expiry cron job started (runs every 15 minutes)');
 
 // ─── Server ───────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 SpareShare AI Backend running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 SpareShare AI Backend running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
