@@ -34,7 +34,10 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      notifications = await Promise.all(notifications.map(async (n) => {
+      const notificationsToTranslate = notifications.slice(0, 20);
+      const remainingNotifications = notifications.slice(20);
+
+      const translated = await Promise.all(notificationsToTranslate.map(async (n) => {
         try {
           const trTitle = await aiService.translate(n.title, 'ur');
           const trMsg = await aiService.translate(n.message, 'ur');
@@ -55,6 +58,7 @@ router.get('/', authMiddleware, async (req, res) => {
           return n.toObject();
         }
       }));
+      notifications = [...translated, ...remainingNotifications.map(n => n.toObject())];
     }
 
     res.json(notifications);
@@ -227,7 +231,10 @@ router.get('/donor', authMiddleware, async (req, res) => {
 
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      notifications = await Promise.all(notifications.map(async (n) => {
+      const notificationsToTranslate = notifications.slice(0, 20);
+      const remainingNotifications = notifications.slice(20);
+
+      const translated = await Promise.all(notificationsToTranslate.map(async (n) => {
         try {
           const trTitle = await aiService.translate(n.title, 'ur');
           const trMsg = await aiService.translate(n.message, 'ur');
@@ -248,6 +255,7 @@ router.get('/donor', authMiddleware, async (req, res) => {
           return n.toObject();
         }
       }));
+      notifications = [...translated, ...remainingNotifications.map(n => n.toObject())];
     }
 
     res.json(notifications);

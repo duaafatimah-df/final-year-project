@@ -9,14 +9,18 @@
 
 /* ── Cover Banner ── */
 .org-cover {
-  height: 380px;
+  height: 240px;
   background-size: cover;
   background-position: center;
   position: relative;
+  border-radius: 0 0 24px 24px;
+  margin: 0 1rem;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 .cover-overlay {
   position: absolute; inset: 0;
-  background: linear-gradient(to bottom, rgba(10,15,26,0.3) 0%, rgba(10,15,26,0.85) 100%);
+  background: linear-gradient(to bottom, rgba(10,15,26,0.1) 0%, rgba(10,15,26,0.8) 100%);
 }
 
 /* ── Profile Grid ── */
@@ -266,7 +270,9 @@
 /* ── Mobile responsiveness ── */
 @media (max-width: 768px) {
   .org-cover {
-    height: 200px;
+    height: 150px;
+    margin: 0;
+    border-radius: 0;
   }
   .profile-container {
     grid-template-columns: 1fr !important;

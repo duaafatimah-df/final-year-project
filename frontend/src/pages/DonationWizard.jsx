@@ -46,6 +46,35 @@ const loadGoogleMaps = (apiKey) => {
   });
 };
 
+function loadLeaflet() {
+  return new Promise((resolve, reject) => {
+    if (window.L) { resolve(window.L); return; }
+    
+    // Load CSS
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+    
+    // Load JS
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.async = true;
+    script.onload = () => {
+      if (window.L) {
+        resolve(window.L);
+      } else {
+        reject(new Error('Leaflet loaded but L is not defined'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load Leaflet script'));
+    document.head.appendChild(script);
+  });
+}
+
 function cleanToStandardCategory(cat) {
   if (!cat) return 'Food';
   const lower = cat.toLowerCase();
@@ -208,6 +237,7 @@ const DonationWizard = () => {
   const [notifiedCount, setNotifiedCount] = useState(0);
   const [directReceiver, setDirectReceiver] = useState(null);
   const [temperature, setTemperature] = useState(25.0);
+  const [useLeaflet, setUseLeaflet] = useState(false);
 
   // Geolocation detection
   useEffect(() => {
@@ -250,6 +280,19 @@ const DonationWizard = () => {
       });
   }, [donorLat, donorLng, user]);
 
+  // Handle Google Maps authentication failures globally
+  useEffect(() => {
+    const prevAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      console.warn("Google Maps Auth failure detected in DonationWizard. Falling back to Leaflet.");
+      setUseLeaflet(true);
+      if (prevAuthFailure) prevAuthFailure();
+    };
+    return () => {
+      window.gm_authFailure = prevAuthFailure;
+    };
+  }, []);
+
   // Redirect unauthenticated user
   useEffect(() => {
     if (!user) {
@@ -289,6 +332,7 @@ const DonationWizard = () => {
                       categoriesParam.toLowerCase().includes('dairy');
 
   const isMedicineInput = categoriesParam.toLowerCase().includes('med');
+  const isGroceryInput = categoriesParam.toLowerCase().includes('groc');
 
   // Trigger Gemini AI Image scan & category classification
   const handleScan = async () => {
@@ -335,6 +379,14 @@ const DonationWizard = () => {
         alert("Medicine donations must be sealed and unopened.");
         return;
       }
+    } else if (isGroceryInput) {
+      if (expiryTime) {
+        const expiry = new Date(expiryTime);
+        if (expiry <= now) {
+          alert("Expiry date must be in the future.");
+          return;
+        }
+      }
     }
 
     setStep(2); // transition to scanning page
@@ -365,7 +417,22 @@ const DonationWizard = () => {
 
         const visualAi = scanRes.data;
         const scanScore = visualAi.safetyScore !== undefined ? visualAi.safetyScore : 60;
-        const detectedCat = cleanToStandardCategory(visualAi.classifiedCategory || cleanCategory);
+        let detectedCat = cleanToStandardCategory(visualAi.classifiedCategory || cleanCategory);
+        
+        // Coerce AI detected category to match the user's selected category domain to prevent validation issues
+        const isFood = (cat) => ['Food', 'Meat', 'Vegetables', 'Fruit', 'Dairy'].includes(cat);
+        if (!isFood(cleanCategory) && isFood(detectedCat)) {
+          detectedCat = cleanCategory;
+        }
+        if (cleanCategory !== 'Medicine' && detectedCat === 'Medicine') {
+          detectedCat = cleanCategory;
+        }
+        if (isFood(cleanCategory) && !isFood(detectedCat)) {
+          detectedCat = cleanCategory;
+        }
+        if (cleanCategory === 'Medicine' && detectedCat !== 'Medicine') {
+          detectedCat = cleanCategory;
+        }
 
         const resultObj = {
           score: scanScore,
@@ -467,6 +534,14 @@ const DonationWizard = () => {
         alert("Medicine donations must be sealed and unopened.");
         return;
       }
+    } else if (finalCat === 'Grocery') {
+      if (expiryTime) {
+        const expiry = new Date(expiryTime);
+        if (expiry <= now) {
+          alert("Expiry date must be in the future.");
+          return;
+        }
+      }
     }
 
     try {
@@ -539,166 +614,138 @@ const DonationWizard = () => {
   // Google Maps rendering inside Step 3
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const leafletMapRef = useRef(null);
+  const leafletMarkersRef = useRef([]);
 
   useEffect(() => {
     if (step === 3 && aiResult?.safe) {
       const gKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-      if (!gKey) {
-        console.warn("VITE_GOOGLE_MAPS_API_KEY not configured.");
-        return;
-      }
 
-      loadGoogleMaps(gKey.trim())
-        .then(maps => {
-          const mapEl = document.getElementById('wizard-map');
-          if (!mapEl) return;
-
-          const map = new maps.Map(mapEl, {
-            center: { lat: donorLat, lng: donorLng },
-            zoom: 12,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
-            styles: [
-              { elementType: 'geometry', stylers: [{ color: '#0f1b0d' }] },
-              { elementType: 'labels.text.fill', stylers: [{ color: '#7a8a7a' }] },
-              { elementType: 'labels.text.stroke', stylers: [{ color: '#0f1b0d' }] },
-              { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2e1a' }] },
-              { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0d1f0d' }] },
-              { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
-              { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-            ]
-          });
-          mapInstanceRef.current = map;
-
-          markersRef.current.forEach(m => m.setMap(null));
-          markersRef.current = [];
-
-          const bounds = new maps.LatLngBounds();
-
-          // Plot donor position
-          const donorMarker = new maps.Marker({
-            position: { lat: donorLat, lng: donorLng },
-            map,
-            title: 'Your Location',
-            icon: {
-              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: '#3b82f6',
-              fillOpacity: 1,
-              strokeColor: '#ffffff',
-              strokeWeight: 1.5,
-              scale: 1.8,
-              anchor: new maps.Point(12, 22),
-            }
-          });
-          markersRef.current.push(donorMarker);
-          bounds.extend({ lat: donorLat, lng: donorLng });
-
-          // Plot direct receiver route line if in direct flow
-          if (orgId !== 'general' && directReceiver) {
-            const recLoc = directReceiver.receiver?.location || {};
-            const rLat = recLoc.lat;
-            const rLng = recLoc.lng;
-            
-            if (donorLat && donorLng && rLat && rLng) {
-              const routePath = new maps.Polyline({
-                path: [
-                  { lat: donorLat, lng: donorLng },
-                  { lat: rLat, lng: rLng }
-                ],
-                geodesic: true,
-                strokeColor: '#34d399',
-                strokeOpacity: 0.8,
-                strokeWeight: 4,
-                map: map
-              });
-              markersRef.current.push(routePath);
-            }
-          }
-
-          console.log("MAP MARKERS", matches);
-          // Group matching suggestions by unique receiver ID
-          const uniqueReceiversMap = new Map();
-          if (orgId !== 'general' && directReceiver) {
-            const recIdStr = (directReceiver.receiver?._id || orgId).toString();
+      // Group matching suggestions by unique receiver ID
+      const uniqueReceiversMap = new Map();
+      if (orgId !== 'general' && directReceiver) {
+        const recIdStr = (directReceiver.receiver?._id || orgId).toString();
+        uniqueReceiversMap.set(recIdStr, {
+          receiverId: directReceiver.receiver,
+          distanceKm: directReceiver.distanceKm,
+          travelTimeMin: directReceiver.travelTimeMin,
+          location: directReceiver.receiver?.location || {},
+          posts: [{ title: `Direct Donation to ${directReceiver.receiver?.name || 'NGO'}` }]
+        });
+      } else if (matches.length > 0) {
+        matches.forEach(m => {
+          const recId = m.receiverId?._id || m._id;
+          if (!recId) return;
+          const recIdStr = recId.toString();
+          if (!uniqueReceiversMap.has(recIdStr)) {
             uniqueReceiversMap.set(recIdStr, {
-              receiverId: directReceiver.receiver,
-              distanceKm: directReceiver.distanceKm,
-              travelTimeMin: directReceiver.travelTimeMin,
-              location: directReceiver.receiver?.location || {},
-              posts: [{ title: `Direct Donation to ${directReceiver.receiver?.name || 'NGO'}` }]
-            });
-          } else if (matches.length > 0) {
-            matches.forEach(m => {
-              const recId = m.receiverId?._id || m._id;
-              if (!recId) return;
-              const recIdStr = recId.toString();
-              if (!uniqueReceiversMap.has(recIdStr)) {
-                uniqueReceiversMap.set(recIdStr, {
-                  receiverId: m.receiverId,
-                  distanceKm: m.distanceKm,
-                  travelTimeMin: m.travelTimeMin,
-                  location: m.receiverId?.location || {},
-                  posts: []
-                });
-              }
-              uniqueReceiversMap.get(recIdStr).posts.push(m);
-            });
-          } else {
-            fallbackNGOs.forEach(f => {
-              const recId = f.ngo?._id;
-              if (!recId) return;
-              const recIdStr = recId.toString();
-              if (!uniqueReceiversMap.has(recIdStr)) {
-                uniqueReceiversMap.set(recIdStr, {
-                  receiverId: f.ngo,
-                  distanceKm: f.distanceKm,
-                  travelTimeMin: f.travelTimeMin,
-                  location: f.ngo?.location || {},
-                  posts: [{ title: `Direct Donation to ${f.ngo?.name}` }]
-                });
-              }
+              receiverId: m.receiverId,
+              distanceKm: m.distanceKm,
+              travelTimeMin: m.travelTimeMin,
+              location: m.receiverId?.location || {},
+              posts: []
             });
           }
-          const listToPlot = Array.from(uniqueReceiversMap.values());
-          const infoWindow = new maps.InfoWindow();
+          uniqueReceiversMap.get(recIdStr).posts.push(m);
+        });
+      } else {
+        fallbackNGOs.forEach(f => {
+          const recId = f.ngo?._id;
+          if (!recId) return;
+          const recIdStr = recId.toString();
+          if (!uniqueReceiversMap.has(recIdStr)) {
+            uniqueReceiversMap.set(recIdStr, {
+              receiverId: f.ngo,
+              distanceKm: f.distanceKm,
+              travelTimeMin: f.travelTimeMin,
+              location: f.ngo?.location || {},
+              posts: [{ title: `Direct Donation to ${f.ngo?.name}` }]
+            });
+          }
+        });
+      }
+      const listToPlot = Array.from(uniqueReceiversMap.values());
 
-          listToPlot.forEach(item => {
-            const latVal = item.location?.lat;
-            const lngVal = item.location?.lng;
-            if (latVal && lngVal) {
-              const recName = item.receiverId?.name || 'Receiver';
-              const labelText = recName.substring(0, 2).toUpperCase();
+      if (!gKey || gKey === 'YOUR_GOOGLE_MAPS_API_KEY_HERE' || gKey === '' || useLeaflet) {
+        setUseLeaflet(true);
+        loadLeaflet()
+          .then(L => {
+            const mapEl = document.getElementById('wizard-map');
+            if (!mapEl) return;
 
-              const marker = new maps.Marker({
-                position: { lat: latVal, lng: lngVal },
-                map,
-                title: recName,
-                icon: {
-                  path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-                  fillColor: '#10b981',
-                  fillOpacity: 1,
-                  strokeColor: '#ffffff',
-                  strokeWeight: 1.5,
-                  scale: 1.8,
-                  anchor: new maps.Point(12, 22),
-                  labelOrigin: new maps.Point(12, 9),
-                },
-                label: {
-                  text: labelText,
-                  color: 'white',
-                  fontSize: '9px',
-                  fontWeight: 'bold'
-                }
-              });
-              markersRef.current.push(marker);
-              bounds.extend({ lat: latVal, lng: lngVal });
+            if (leafletMapRef.current) {
+              leafletMapRef.current.remove();
+            }
+            mapEl.innerHTML = ''; // Clear previous elements (e.g. GMaps elements)
 
-              marker.addListener('click', () => {
+            const map = L.map(mapEl).setView([donorLat || 31.5204, donorLng || 74.3587], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+              subdomains: 'abcd',
+              maxZoom: 20
+            }).addTo(map);
+            leafletMapRef.current = map;
+
+            leafletMarkersRef.current.forEach(m => m.remove());
+            leafletMarkersRef.current = [];
+
+            // Plot donor marker
+            const donorIcon = L.divIcon({
+              html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#3b82f6" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="white" stroke-width="1.5"/></svg>`,
+              className: 'custom-leaflet-pin',
+              iconSize: [36, 36],
+              iconAnchor: [18, 36],
+              popupAnchor: [0, -36]
+            });
+            const donorMarker = L.marker([donorLat || 31.5204, donorLng || 74.3587], { icon: donorIcon }).addTo(map).bindPopup('Your Location (Donor)');
+            leafletMarkersRef.current.push(donorMarker);
+
+            // Draw direct route if needed
+            if (orgId !== 'general' && directReceiver) {
+              const recLoc = directReceiver.receiver?.location || {};
+              const rLat = recLoc.lat;
+              const rLng = recLoc.lng;
+              if (donorLat && donorLng && rLat && rLng) {
+                const polyline = L.polyline([[donorLat, donorLng], [rLat, rLng]], {
+                  color: '#34d399',
+                  weight: 4,
+                  opacity: 0.8,
+                  dashArray: '5, 10'
+                }).addTo(map);
+                leafletMarkersRef.current.push(polyline);
+              }
+            }
+
+            const bounds = L.latLngBounds([donorLat || 31.5204, donorLng || 74.3587]);
+
+            listToPlot.forEach(item => {
+              const latVal = item.location?.lat;
+              const lngVal = item.location?.lng;
+              if (latVal && lngVal) {
+                const recName = item.receiverId?.name || 'Receiver';
+                const labelText = recName.substring(0, 2).toUpperCase();
+
+                const recIcon = L.divIcon({
+                  html: `<div style="position:relative; width:36px; height:36px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#10b981" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="white" stroke-width="1.5"/>
+                    </svg>
+                    <span style="position:absolute; top:6px; left:0; right:0; text-align:center; color:white; font-size:9px; font-weight:bold; font-family:sans-serif;">${labelText}</span>
+                  </div>`,
+                  className: 'custom-leaflet-pin-label',
+                  iconSize: [36, 36],
+                  iconAnchor: [18, 36],
+                  popupAnchor: [0, -36]
+                });
+
+                const marker = L.marker([latVal, lngVal], { icon: recIcon }).addTo(map);
+                leafletMarkersRef.current.push(marker);
+                bounds.extend([latVal, lngVal]);
+
                 const address = item.location?.address || '';
                 const requestsHtml = item.posts.map(p => `<li>"${p.title}"</li>`).join('');
 
-                infoWindow.setContent(`
+                const popupContent = `
                   <div style="font-family:Inter,sans-serif;padding:6px;max-width:200px;color:#0f172a;">
                     <strong style="color:#0f172a;font-size:0.95rem;display:block;margin-bottom:4px">Receiver: ${recName}</strong>
                     <div style="color:#64748b;font-size:0.75rem;">📍 ${item.distanceKm} km away</div>
@@ -710,21 +757,159 @@ const DonationWizard = () => {
                       </ul>
                     </div>
                   </div>
-                `);
-                infoWindow.open(map, marker);
-              });
-            }
-          });
+                `;
+                marker.bindPopup(popupContent);
+              }
+            });
 
-          if (listToPlot.length > 0) {
-            map.fitBounds(bounds);
-          } else {
-            map.setZoom(13);
-          }
-        })
-        .catch(err => console.error("Google Maps load failed:", err));
+            if (listToPlot.length > 0) {
+              map.fitBounds(bounds, { padding: [40, 40] });
+            }
+          })
+          .catch(err => console.error("Leaflet load failed in DonationWizard:", err));
+      } else {
+        setUseLeaflet(false);
+        loadGoogleMaps(gKey.trim())
+          .then(maps => {
+            const mapEl = document.getElementById('wizard-map');
+            if (!mapEl) return;
+            mapEl.innerHTML = ''; // Clear previous elements (e.g. Leaflet elements)
+
+            const map = new maps.Map(mapEl, {
+              center: { lat: donorLat || 31.5204, lng: donorLng || 74.3587 },
+              zoom: 12,
+              mapTypeControl: false,
+              streetViewControl: false,
+              fullscreenControl: false,
+              styles: [
+                { elementType: 'geometry', stylers: [{ color: '#0f1b0d' }] },
+                { elementType: 'labels.text.fill', stylers: [{ color: '#7a8a7a' }] },
+                { elementType: 'labels.text.stroke', stylers: [{ color: '#0f1b0d' }] },
+                { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2e1a' }] },
+                { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0d1f0d' }] },
+                { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
+                { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+              ]
+            });
+            mapInstanceRef.current = map;
+
+            markersRef.current.forEach(m => m.setMap(null));
+            markersRef.current = [];
+
+            const bounds = new maps.LatLngBounds();
+            bounds.extend({ lat: donorLat || 31.5204, lng: donorLng || 74.3587 });
+
+            // Plot donor position
+            const donorMarker = new maps.Marker({
+              position: { lat: donorLat || 31.5204, lng: donorLng || 74.3587 },
+              map,
+              title: 'Your Location',
+              icon: {
+                path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+                fillColor: '#3b82f6',
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 1.5,
+                scale: 1.8,
+                anchor: new maps.Point(12, 22),
+              }
+            });
+            markersRef.current.push(donorMarker);
+
+            // Plot direct receiver route line if in direct flow
+            if (orgId !== 'general' && directReceiver) {
+              const recLoc = directReceiver.receiver?.location || {};
+              const rLat = recLoc.lat;
+              const rLng = recLoc.lng;
+              
+              if (donorLat && donorLng && rLat && rLng) {
+                const routePath = new maps.Polyline({
+                  path: [
+                    { lat: donorLat, lng: donorLng },
+                    { lat: rLat, lng: rLng }
+                  ],
+                  geodesic: true,
+                  strokeColor: '#34d399',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 4,
+                  map: map
+                });
+                markersRef.current.push(routePath);
+              }
+            }
+
+            const infoWindow = new maps.InfoWindow();
+
+            listToPlot.forEach(item => {
+              const latVal = item.location?.lat;
+              const lngVal = item.location?.lng;
+              if (latVal && lngVal) {
+                const recName = item.receiverId?.name || 'Receiver';
+                const labelText = recName.substring(0, 2).toUpperCase();
+
+                const marker = new maps.Marker({
+                  position: { lat: latVal, lng: lngVal },
+                  map,
+                  title: recName,
+                  icon: {
+                    path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+                    fillColor: '#10b981',
+                    fillOpacity: 1,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 1.5,
+                    scale: 1.8,
+                    anchor: new maps.Point(12, 22),
+                    labelOrigin: new maps.Point(12, 9),
+                  },
+                  label: {
+                    text: labelText,
+                    color: 'white',
+                    fontSize: '9px',
+                    fontWeight: 'bold'
+                  }
+                });
+                markersRef.current.push(marker);
+                bounds.extend({ lat: latVal, lng: lngVal });
+
+                marker.addListener('click', () => {
+                  const address = item.location?.address || '';
+                  const requestsHtml = item.posts.map(p => `<li>"${p.title}"</li>`).join('');
+
+                  infoWindow.setContent(`
+                    <div style="font-family:Inter,sans-serif;padding:6px;max-width:200px;color:#0f172a;">
+                      <strong style="color:#0f172a;font-size:0.95rem;display:block;margin-bottom:4px">Receiver: ${recName}</strong>
+                      <div style="color:#64748b;font-size:0.75rem;">📍 ${item.distanceKm} km away</div>
+                      ${address ? `<div style="color:#64748b;font-size:0.75rem;margin-top:2px;">🏠 Address: ${address}</div>` : ''}
+                      <div style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
+                        <div style="font-weight:600;font-size:0.75rem;color:#0f172a;">Requested Items:</div>
+                        <ul style="margin:4px 0 0;padding-left:12px;font-size:0.75rem;color:#334155;">
+                          ${requestsHtml}
+                        </ul>
+                      </div>
+                    </div>
+                  `);
+                  infoWindow.open(map, marker);
+                });
+              }
+            });
+
+            if (listToPlot.length > 0) {
+              map.fitBounds(bounds);
+            } else {
+              map.setZoom(13);
+            }
+          })
+          .catch(err => console.error("Google Maps load failed:", err));
+      }
     }
-  }, [step, matches, fallbackNGOs, donorLat, donorLng, aiResult]);
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [step, matches, fallbackNGOs, donorLat, donorLng, aiResult, useLeaflet]);
 
   if (loadingOrg) {
     return (
@@ -869,10 +1054,12 @@ const DonationWizard = () => {
                     </div>
                   )}
 
-                  {isMedicineInput && (
+                  {(isMedicineInput || isGroceryInput) && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       <div>
-                        <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Medicine Expiry Date</label>
+                        <label style={{ color: '#9ca3af', fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                          {isMedicineInput ? "Medicine Expiry Date" : "Expiry Date (Optional)"}
+                        </label>
                         <input 
                           type="date" 
                           value={expiryTime} 
@@ -880,15 +1067,17 @@ const DonationWizard = () => {
                           style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.03)', color: 'white', fontSize: '0.9rem' }}
                         />
                       </div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'white', fontSize: '0.9rem', cursor: 'pointer' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={isSealed} 
-                          onChange={e => setIsSealed(e.target.checked)} 
-                          style={{ width: '18px', height: '18px', accentColor: '#10b981' }}
-                        />
-                        Medicine packaging is sealed and unopened
-                      </label>
+                      {isMedicineInput && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'white', fontSize: '0.9rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={isSealed} 
+                            onChange={e => setIsSealed(e.target.checked)} 
+                            style={{ width: '18px', height: '18px', accentColor: '#10b981' }}
+                          />
+                          Medicine packaging is sealed and unopened
+                        </label>
+                      )}
                     </div>
                   )}
                 </div>

@@ -63,8 +63,12 @@ async function analyzeFraudRisk(targetUserId, reviewerId, donationId, reviewComm
     }
 
     // 4. Historical reports count
+    const targetDonations = await Donation.find({ 
+      $or: [{ donorId: targetUserId }, { receiverId: targetUserId }] 
+    }).select('_id').lean();
+    const donationIds = targetDonations.map(d => d._id);
     const historicalReports = await Report.countDocuments({ 
-      donationId: { $in: await Donation.find({ $or: [{ donorId: targetUserId }, { receiverId: targetUserId }] }).select('_id') }
+      donationId: { $in: donationIds }
     });
     score += Math.min(historicalReports * 15, 30); // Cap historical reports factor at 30
 

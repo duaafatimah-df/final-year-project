@@ -8,33 +8,39 @@ import './Home.css';
 
 const t = (lang, en, ur) => lang === 'Eng' ? en : ur;
 
-const img1 = 'https://images.pexels.com/photos/6646917/pexels-photo-6646917.jpeg?auto=compress&cs=tinysrgb&w=800';
-const img2 = 'https://images.pexels.com/photos/6995201/pexels-photo-6995201.jpeg?auto=compress&cs=tinysrgb&w=800';
-const img3 = 'https://images.pexels.com/photos/6994982/pexels-photo-6994982.jpeg?auto=compress&cs=tinysrgb&w=800';
-const img4 = 'https://images.pexels.com/photos/6591154/pexels-photo-6591154.jpeg?auto=compress&cs=tinysrgb&w=800';
+const imgFood = '/images/pakistan_ngo_food.png';
+const imgMedical = '/images/pakistan_ngo_medical.png';
+const imgEducation = '/images/pakistan_ngo_education.png';
+const imgRescue = '/images/pakistan_ngo_rescue.png';
+const imgClothing = '/images/pakistan_ngo_clothing.png';
+const imgRation = '/images/pakistan_ngo_ration.png';
+const imgWater = '/images/pakistan_ngo_water.png';
+const imgCommunity = '/images/pakistan_ngo_community.png';
+const imgShelter = '/images/pakistan_ngo_shelter.png';
+const imgYouth = '/images/pakistan_ngo_youth.png';
 const logo1 = 'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=150';
 
 export const organizations = [
-  { id: 'edhi', name: 'Edhi Foundation', type: 'NGO', image: img1, logo: logo1, desc: 'Ambulance and social welfare services across Pakistan.', city: 'Karachi', tags: ['Health', 'Shelter'] },
-  { id: 'saylani', name: 'Saylani Welfare', type: 'NGO', image: img2, logo: logo1, desc: 'Feeding hundreds of thousands daily across all provinces.', city: 'Karachi', tags: ['Food', 'Education'] },
-  { id: 'chhipa', name: 'Chhipa Welfare', type: 'NGO', image: img3, logo: logo1, desc: 'Rescue ambulances and food distribution drives.', city: 'Lahore', tags: ['Emergency'] },
-  { id: 'tcf', name: 'The Citizens Foundation', type: 'NGO', image: img4, logo: logo1, desc: 'Providing quality education to underprivileged children.', city: 'Islamabad', tags: ['Education'] },
-  { id: 'alkhidmat', name: 'Al-Khidmat', type: 'NGO', image: img1, logo: logo1, desc: 'Disaster relief, health camps and community development.', city: 'Peshawar', tags: ['Disaster Relief'] },
-  { id: 'jdc', name: 'JDC Welfare', type: 'NGO', image: img2, logo: logo1, desc: 'Free healthcare, rescue operations and food distribution.', city: 'Karachi', tags: ['Rescue'] },
-  { id: 'transparent', name: 'Transparent Hands', type: 'NGO', image: img3, logo: logo1, desc: 'Medical surgeries crowdfunding for the underprivileged.', city: 'Lahore', tags: ['Medical'] },
-  { id: 'shahid', name: 'Shahid Afridi Foundation', type: 'NGO', image: img4, logo: logo1, desc: 'Clean water, health and education for rural communities.', city: 'Peshawar', tags: ['Water', 'Health'] },
-  { id: 'akhuwat', name: 'Akhuwat', type: 'NGO', image: img1, logo: logo1, desc: 'Interest-free microfinance empowering thousands of families.', city: 'Lahore', tags: ['Empowerment'] },
-  { id: 'shaukat', name: 'Shaukat Khanum', type: 'NGO', image: img2, logo: logo1, desc: 'Cancer hospital, research and free treatment for patients.', city: 'Islamabad', tags: ['Health'] },
-  { id: 'rizq', name: '@Rizq.ShareFood', type: 'Social', image: img3, logo: logo1, desc: 'Eradicating hunger through community food banks.', city: 'Lahore', tags: ['Food Rescue'] },
-  { id: 'robinhood', name: '@RobinHoodArmyPK', type: 'Social', image: img4, logo: logo1, desc: 'Zero-funds volunteer organization fighting hunger.', city: 'Islamabad', tags: ['Surplus'] },
-  { id: 'wall', name: '@WallOfKindness', type: 'Social', image: img1, logo: logo1, desc: 'Leave what you don\'t need, take what you do.', city: 'Peshawar', tags: ['Clothing'] },
-  { id: 'smile', name: '@SmileSpreaders', type: 'Social', image: img2, logo: logo1, desc: 'Youth volunteers spreading smiles across Pakistan.', city: 'Karachi', tags: ['Youth'] },
-  { id: 'hope', name: '@HopeForAll', type: 'Social', image: img3, logo: logo1, desc: 'Monthly ration distribution drives for deserving families.', city: 'Lahore', tags: ['Rations'] },
-  { id: 'street', name: '@StreetScholars', type: 'Social', image: img4, logo: logo1, desc: 'Teaching street children through mobile classrooms.', city: 'Karachi', tags: ['Education'] },
-  { id: 'warm', name: '@WarmHearts', type: 'Social', image: img1, logo: logo1, desc: 'Winter clothing drives for underprivileged communities.', city: 'Islamabad', tags: ['Winter'] },
-  { id: 'green', name: '@GreenPakistan', type: 'Social', image: img2, logo: logo1, desc: 'Planting trees and environmental cleanup drives.', city: 'Peshawar', tags: ['Environment'] },
-  { id: 'blood', name: '@BloodDonorsPK', type: 'Social', image: img3, logo: logo1, desc: 'Connecting blood donors with patients in need.', city: 'Lahore', tags: ['Health'] },
-  { id: 'animal', name: '@AnimalRescuePK', type: 'Social', image: img4, logo: logo1, desc: 'Rescuing and rehabilitating street animals across Pakistan.', city: 'Karachi', tags: ['Animals'] },
+  { id: 'edhi', name: 'Edhi Foundation', type: 'NGO', image: imgRescue, logo: logo1, desc: 'Ambulance and social welfare services across Pakistan.', city: 'Karachi', tags: ['Health', 'Shelter'] },
+  { id: 'saylani', name: 'Saylani Welfare', type: 'NGO', image: imgFood, logo: logo1, desc: 'Feeding hundreds of thousands daily across all provinces.', city: 'Karachi', tags: ['Food', 'Education'] },
+  { id: 'chhipa', name: 'Chhipa Welfare', type: 'NGO', image: imgRescue, logo: logo1, desc: 'Rescue ambulances and food distribution drives.', city: 'Lahore', tags: ['Emergency'] },
+  { id: 'tcf', name: 'The Citizens Foundation', type: 'NGO', image: imgEducation, logo: logo1, desc: 'Providing quality education to underprivileged children.', city: 'Islamabad', tags: ['Education'] },
+  { id: 'alkhidmat', name: 'Al-Khidmat', type: 'NGO', image: imgCommunity, logo: logo1, desc: 'Disaster relief, health camps and community development.', city: 'Peshawar', tags: ['Disaster Relief'] },
+  { id: 'jdc', name: 'JDC Welfare', type: 'NGO', image: imgRation, logo: logo1, desc: 'Free healthcare, rescue operations and food distribution.', city: 'Karachi', tags: ['Rescue'] },
+  { id: 'transparent', name: 'Transparent Hands', type: 'NGO', image: imgMedical, logo: logo1, desc: 'Medical surgeries crowdfunding for the underprivileged.', city: 'Lahore', tags: ['Medical'] },
+  { id: 'shahid', name: 'Shahid Afridi Foundation', type: 'NGO', image: imgWater, logo: logo1, desc: 'Clean water, health and education for rural communities.', city: 'Peshawar', tags: ['Water', 'Health'] },
+  { id: 'akhuwat', name: 'Akhuwat', type: 'NGO', image: imgCommunity, logo: logo1, desc: 'Interest-free microfinance empowering thousands of families.', city: 'Lahore', tags: ['Empowerment'] },
+  { id: 'shaukat', name: 'Shaukat Khanum', type: 'NGO', image: imgMedical, logo: logo1, desc: 'Cancer hospital, research and free treatment for patients.', city: 'Islamabad', tags: ['Health'] },
+  { id: 'rizq', name: '@Rizq.ShareFood', type: 'Social', image: imgFood, logo: logo1, desc: 'Eradicating hunger through community food banks.', city: 'Lahore', tags: ['Food Rescue'] },
+  { id: 'robinhood', name: '@RobinHoodArmyPK', type: 'Social', image: imgFood, logo: logo1, desc: 'Zero-funds volunteer organization fighting hunger.', city: 'Islamabad', tags: ['Surplus'] },
+  { id: 'wall', name: '@WallOfKindness', type: 'Social', image: imgClothing, logo: logo1, desc: 'Leave what you don\'t need, take what you do.', city: 'Peshawar', tags: ['Clothing'] },
+  { id: 'smile', name: '@SmileSpreaders', type: 'Social', image: imgYouth, logo: logo1, desc: 'Youth volunteers spreading smiles across Pakistan.', city: 'Karachi', tags: ['Youth'] },
+  { id: 'hope', name: '@HopeForAll', type: 'Social', image: imgRation, logo: logo1, desc: 'Monthly ration distribution drives for deserving families.', city: 'Lahore', tags: ['Rations'] },
+  { id: 'street', name: '@StreetScholars', type: 'Social', image: imgEducation, logo: logo1, desc: 'Teaching street children through mobile classrooms.', city: 'Karachi', tags: ['Education'] },
+  { id: 'warm', name: '@WarmHearts', type: 'Social', image: imgClothing, logo: logo1, desc: 'Winter clothing drives for underprivileged communities.', city: 'Islamabad', tags: ['Winter'] },
+  { id: 'green', name: '@GreenPakistan', type: 'Social', image: imgYouth, logo: logo1, desc: 'Planting trees and environmental cleanup drives.', city: 'Peshawar', tags: ['Environment'] },
+  { id: 'blood', name: '@BloodDonorsPK', type: 'Social', image: imgMedical, logo: logo1, desc: 'Connecting blood donors with patients in need.', city: 'Lahore', tags: ['Health'] },
+  { id: 'animal', name: '@AnimalRescuePK', type: 'Social', image: imgCommunity, logo: logo1, desc: 'Rescuing and rehabilitating street animals across Pakistan.', city: 'Karachi', tags: ['Animals'] },
 ];
 
 const Home = () => {

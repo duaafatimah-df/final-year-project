@@ -587,8 +587,29 @@
 .ai-sc-header h4 { font-weight: 700; font-size: 0.9rem; color: var(--text-main); margin: 0; }
 .ai-sc-header p { font-size: 0.75rem; color: var(--text-muted); margin: 0; }
 
+/* AI Dashboard Split Layout Grids */
+.rp-dashboard-top-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.rp-dashboard-map-row {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
 /* ── Mobile Responsiveness Overrides ── */
 @media (max-width: 768px) {
+  .rp-dashboard-top-row {
+    grid-template-columns: 1fr !important;
+  }
+  .rp-dashboard-map-row {
+    grid-template-columns: 1fr !important;
+  }
   .portal-logo span {
     display: none;
   }
@@ -630,6 +651,63 @@
   }
   .portal-title {
     font-size: 1.15rem;
+  }
+}
+
+/* Padded Modal Card */
+.pm-card-padded {
+  padding: 2rem;
+}
+@media (max-width: 576px) {
+  .pm-card-padded {
+    padding: 1.25rem;
+  }
+}
+
+/* Details Grid inside Modal */
+.pm-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+.pm-details-email {
+  grid-column: 1 / -1;
+  word-break: break-all;
+}
+@media (max-width: 576px) {
+  .pm-details-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+/* Actions Row inside Modals */
+.pm-actions-row {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 20px;
+}
+.pm-actions-row .btn {
+  border-radius: 99px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+@media (max-width: 576px) {
+  .pm-actions-row {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+  }
+  .pm-actions-row .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.8rem 1.5rem;
   }
 }
 

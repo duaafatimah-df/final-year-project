@@ -30,7 +30,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 function cleanToStandardCategory(cat) {
-  if (!cat) return 'Other';
+  if (!cat) return 'Grocery';
   const lower = cat.toLowerCase();
   if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
     return 'Food';
@@ -47,7 +47,7 @@ function cleanToStandardCategory(cat) {
   if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
     return 'Grocery';
   }
-  return 'Other';
+  return 'Grocery';
 }
 
 // Create a new demand post
@@ -85,7 +85,10 @@ router.get('/my-posts', authMiddleware, async (req, res) => {
 
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      posts = await Promise.all(posts.map(async p => {
+      const postsToTranslate = posts.slice(0, 20);
+      const remainingPosts = posts.slice(20);
+
+      const translated = await Promise.all(postsToTranslate.map(async p => {
         try {
           const trTitle = await aiService.translate(p.title, 'ur');
           const trDesc = await aiService.translate(p.desc, 'ur');
@@ -96,6 +99,7 @@ router.get('/my-posts', authMiddleware, async (req, res) => {
           return p.toObject();
         }
       }));
+      posts = [...translated, ...remainingPosts.map(p => p.toObject())];
     }
 
     res.json(posts);
@@ -113,7 +117,10 @@ router.get('/active', async (req, res) => {
 
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      posts = await Promise.all(posts.map(async p => {
+      const postsToTranslate = posts.slice(0, 20);
+      const remainingPosts = posts.slice(20);
+
+      const translated = await Promise.all(postsToTranslate.map(async p => {
         try {
           const trTitle = await aiService.translate(p.title, 'ur');
           const trDesc = await aiService.translate(p.desc, 'ur');
@@ -124,6 +131,7 @@ router.get('/active', async (req, res) => {
           return p.toObject();
         }
       }));
+      posts = [...translated, ...remainingPosts.map(p => p.toObject())];
     }
 
     res.json(posts);
@@ -206,7 +214,10 @@ router.get('/nearby', async (req, res) => {
     // Translation Integration
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      posts = await Promise.all(posts.map(async p => {
+      const postsToTranslate = posts.slice(0, 20);
+      const remainingPosts = posts.slice(20);
+
+      const translated = await Promise.all(postsToTranslate.map(async p => {
         try {
           const trTitle = await aiService.translate(p.title, 'ur');
           const trDesc = await aiService.translate(p.desc || p.description, 'ur');
@@ -216,6 +227,7 @@ router.get('/nearby', async (req, res) => {
           return p;
         }
       }));
+      posts = [...translated, ...remainingPosts];
     }
 
     res.json({

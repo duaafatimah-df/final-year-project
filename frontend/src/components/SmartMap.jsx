@@ -5,7 +5,7 @@ import { Loader2, AlertCircle, MapPin, CheckCircle } from 'lucide-react';
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
   : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
-const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const GMAPS_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
 
 function loadLeaflet() {
   return new Promise((resolve, reject) => {
@@ -145,10 +145,23 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
     }
   }, [userLat, userLng, category, isRejected, receiverList]);
 
+  // Handle Google Maps authentication failures globally
+  useEffect(() => {
+    const prevAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      console.warn("Google Maps Auth failure detected. Falling back to Leaflet.");
+      setUseLeaflet(true);
+      if (prevAuthFailure) prevAuthFailure();
+    };
+    return () => {
+      window.gm_authFailure = prevAuthFailure;
+    };
+  }, []);
+
   useEffect(() => {
     if (!userLat || !userLng) return;
 
-    if (!GMAPS_KEY || GMAPS_KEY === 'YOUR_GOOGLE_MAPS_API_KEY_HERE' || GMAPS_KEY === '') {
+    if (!GMAPS_KEY || GMAPS_KEY === 'YOUR_GOOGLE_MAPS_API_KEY_HERE' || GMAPS_KEY === '' || useLeaflet) {
       setUseLeaflet(true);
       loadLeaflet()
         .then(L => {
@@ -156,9 +169,12 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
           if (leafletMapRef.current) {
             leafletMapRef.current.remove();
           }
+          mapRef.current.innerHTML = ''; // Clear existing DOM content (e.g. GMaps elements)
           const map = L.map(mapRef.current).setView([userLat, userLng], isRejected ? 14 : 12);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
           }).addTo(map);
           leafletMapRef.current = map;
           setMapLoaded(true);
@@ -169,6 +185,7 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
       loadGoogleMaps(GMAPS_KEY)
         .then(maps => {
           if (!mapRef.current) return;
+          mapRef.current.innerHTML = ''; // Clear Leaflet elements if any
           const map = new maps.Map(mapRef.current, {
             center: { lat: userLat, lng: userLng },
             zoom: isRejected ? 14 : 12,
@@ -176,12 +193,17 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
             streetViewControl: false,
             fullscreenControl: false,
             styles: [
-              { elementType: 'geometry', stylers: [{ color: '#f8fafc' }] },
-              { elementType: 'labels.text.fill', stylers: [{ color: '#475569' }] },
-              { elementType: 'labels.text.stroke', stylers: [{ color: '#f8fafc' }] },
-              { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#e2e8f0' }] },
-              { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#bae6fd' }] },
+              { elementType: 'geometry', stylers: [{ color: '#111827' }] },
+              { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
+              { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+              { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+              { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#10b981' }] },
               { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+              { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+              { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#111827' }] },
+              { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+              { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+              { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#030712' }] }
             ],
           });
           googleMapRef.current = map;
@@ -215,7 +237,7 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         leafletMapRef.current = null;
       }
     };
-  }, [userLat, userLng, isRejected]);
+  }, [userLat, userLng, isRejected, useLeaflet]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -297,9 +319,10 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         travelTime = Math.max(2, Math.round(travelTime));
 
         const popupContent = `
-          <div style="font-family:Inter,sans-serif;padding:6px;color:#0f172a;min-width:120px;">
-            <strong style="color:#0f172a;font-size:0.92rem;display:block;margin-bottom:4px">${recName}</strong>
-            <div style="color:#10b981;font-size:0.82rem;font-weight:700;">📍 ${distance} km away</div>
+          <div style="font-family:Inter,sans-serif;padding:8px;color:#0f172a;min-width:160px;">
+            <strong style="color:#0f172a;font-size:0.92rem;display:block;margin-bottom:6px">${recName}</strong>
+            <div style="color:#10b981;font-size:0.82rem;font-weight:700;margin-bottom:4px;">📍 ${distance} km away</div>
+            <div style="color:#2563eb;font-size:0.82rem;font-weight:700;">🚗 ${travelTime} mins travel</div>
           </div>
         `;
         marker.bindPopup(popupContent);
@@ -398,9 +421,10 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
           travelTime = Math.max(2, Math.round(travelTime));
 
           infoWindowRef.current.setContent(`
-            <div style="font-family:Inter,sans-serif;padding:6px;color:#0f172a;min-width:120px;">
-              <strong style="color:#0f172a;font-size:0.92rem;display:block;margin-bottom:4px">${recName}</strong>
-              <div style="color:#10b981;font-size:0.82rem;font-weight:700;">📍 ${distance} km away</div>
+            <div style="font-family:Inter,sans-serif;padding:8px;color:#0f172a;min-width:160px;">
+              <strong style="color:#0f172a;font-size:0.92rem;display:block;margin-bottom:6px">${recName}</strong>
+              <div style="color:#10b981;font-size:0.82rem;font-weight:700;margin-bottom:4px;">📍 ${distance} km away</div>
+              <div style="color:#2563eb;font-size:0.82rem;font-weight:700;">🚗 ${travelTime} mins travel</div>
             </div>
           `);
           infoWindowRef.current.open(googleMapRef.current, marker);
@@ -429,7 +453,7 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
         googleMapRef.current.fitBounds(bounds);
       }
     }
-  }, [receivers, mapLoaded, isRejected, useLeaflet, userLat, userLng, onSelectReceiver]);
+  }, [receivers, mapLoaded, isRejected, useLeaflet, userLat, userLng, onSelectReceiver, weatherCondition]);
 
   // Helper to count unique receivers for displaying header count
   const getUniqueReceiverCount = () => {
@@ -443,12 +467,12 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
   const uniqueReceiverCount = getUniqueReceiverCount();
 
   return (
-    <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginTop: 24 }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <MapPin size={18} color="#3b82f6" /> Smart Donation Map
+    <div style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', marginTop: 24 }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <MapPin size={18} color="#10b981" /> Smart Donation Map
         </h3>
-        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
+        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
           {uniqueReceiverCount} suggested receiver{uniqueReceiverCount !== 1 ? 's' : ''}
         </span>
       </div>
@@ -471,8 +495,8 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
       )}
 
       {/* Simulated Weather Controller */}
-      <div style={{ display: 'flex', gap: '8px', padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>Simulated Weather:</span>
+      <div style={{ display: 'flex', gap: '8px', padding: '10px 20px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.07)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Simulated Weather:</span>
         {[
           { key: 'Sunny', label: '☀️ Sunny' },
           { key: 'Rainy', label: '🌧️ Rainy / Delay (+15%)' }
@@ -483,9 +507,9 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
             style={{
               padding: '4px 10px',
               borderRadius: '8px',
-              border: '1px solid ' + (weatherCondition === cond.key ? '#3b82f6' : '#e2e8f0'),
-              background: weatherCondition === cond.key ? '#eff6ff' : 'white',
-              color: weatherCondition === cond.key ? '#2563eb' : '#64748b',
+              border: '1px solid ' + (weatherCondition === cond.key ? '#10b981' : 'rgba(255,255,255,0.1)'),
+              background: weatherCondition === cond.key ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)',
+              color: weatherCondition === cond.key ? '#34d399' : 'var(--text-muted)',
               cursor: 'pointer',
               fontSize: '0.78rem',
               fontWeight: 600,
@@ -513,7 +537,7 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
 
       <div style={{ position: 'relative', height: 400, width: '100%' }}>
         {mapError ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#f8fafc', color: '#64748b' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#111827', color: 'var(--text-muted)' }}>
             <AlertCircle size={32} />
             <p style={{ marginTop: 12 }}>{mapError}</p>
           </div>
@@ -521,9 +545,9 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
           <>
             <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
             {loading && (
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                <Loader2 size={32} className="spin" color="#3b82f6" />
-                <p style={{ marginTop: 12, fontWeight: 600, color: '#475569' }}>Finding nearby receivers...</p>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(17,24,39,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                <Loader2 size={32} className="spin" color="#10b981" />
+                <p style={{ marginTop: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Finding nearby receivers...</p>
               </div>
             )}
           </>

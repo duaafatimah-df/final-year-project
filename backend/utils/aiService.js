@@ -2,11 +2,12 @@ const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const AI_URL = process.env.PYTHON_AI_URL || 'http://127.0.0.1:8000/ai';
+const translationCache = {};
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 function cleanToStandardCategory(cat) {
-  if (!cat) return 'Other';
+  if (!cat) return 'Grocery';
   const lower = cat.toLowerCase();
   if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
     return 'Food';
@@ -23,7 +24,7 @@ function cleanToStandardCategory(cat) {
   if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
     return 'Grocery';
   }
-  return 'Other';
+  return 'Grocery';
 }
 
 const aiService = {
@@ -65,12 +66,12 @@ Respond ONLY in JSON:
 You are a pharmaceutical safety inspector.
 
 Analyze the image and determine:
-
 1. Is this a valid medicine product?
-2. Check packaging condition (sealed/open/damaged)
-3. Detect expiry date and manufacturing date if visible
+2. Check packaging condition (sealed/open/damaged).
+CRITICAL RULE: Do NOT reject a medicine for minor cosmetic outer packaging damage (like a slightly crushed, creased, or bent cardboard box corner) as long as the primary container (bottle, blister pack, tube, or vial) inside is intact, sealed, and undamaged.
+3. Detect expiry date and manufacturing date if visible.
 4. Identify medicine type (tablets, capsules, syrup, etc.)
-5. Evaluate if safe for donation (NOT food safety)
+5. Evaluate if safe for donation (NOT food safety).
 
 Return JSON:
 {
@@ -84,6 +85,7 @@ Return JSON:
 IMPORTANT:
 - The actual current date is ${currentDateStr}. Use this date for any date comparisons.
 - Do NOT reject a medicine as "unverifiable" or "unsafe" due to its manufacturing date unless its manufacturing date is in the future (after ${currentDateStr}).
+- For minor cosmetic outer box corner damage or crushed corners, set status to "valid" or "needs_review" (with score 75-90) instead of "rejected". Only reject if the inner container/seal is actually broken or the item is expired.
 - DO NOT mention food
 - DO NOT compare with food
 - Treat this ONLY as medicine
@@ -257,8 +259,15 @@ RULES:
   // 5. Deep Translation
   translate: async (text, targetLang = 'ur') => {
     if (!text) return { translatedText: "" };
+    const cacheKey = `${targetLang}:${text}`;
+    if (translationCache[cacheKey]) {
+      return { translatedText: translationCache[cacheKey] };
+    }
     try {
       const res = await axios.post(`${AI_URL}/translate`, { text, targetLang });
+      if (res.data && res.data.translatedText) {
+        translationCache[cacheKey] = res.data.translatedText;
+      }
       return res.data;
     } catch (err) {
       console.error('Python API Error (translate):', err.message);

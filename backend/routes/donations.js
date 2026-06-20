@@ -49,7 +49,7 @@ function isSummerNow() {
 }
 
 function cleanToStandardCategory(cat) {
-  if (!cat) return 'Other';
+  if (!cat) return 'Grocery';
   const lower = cat.toLowerCase();
   if (lower.includes('food') || lower.includes('meat') || lower.includes('veg') || lower.includes('fruit') || lower.includes('dairy') || lower.includes('cooked') || lower.includes('dish') || lower.includes('meal')) {
     return 'Food';
@@ -66,7 +66,7 @@ function cleanToStandardCategory(cat) {
   if (lower.includes('groc') || lower.includes('ration') || lower.includes('pantry') || lower.includes('staple') || lower.includes('oil') || lower.includes('flour') || lower.includes('rice')) {
     return 'Grocery';
   }
-  return 'Other';
+  return 'Grocery';
 }
 
 function isFoodCategory(cat) {
@@ -278,6 +278,35 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
+    // Override Medicine safety score if rejection is solely due to cosmetic packaging damage (like crushed boxes)
+    if ((cleanCategoryInput === 'Medicine' || category === 'Medicine') && aiSafetyScore < 70) {
+      const reasonLower = aiAnalysisReason.toLowerCase();
+      const hasCosmeticKeywords = reasonLower.includes('crushed') || reasonLower.includes('corner') || reasonLower.includes('cardboard') || reasonLower.includes('bent') || reasonLower.includes('creased') || reasonLower.includes('cosmetic') || reasonLower.includes('outer package') || reasonLower.includes('outer packaging') || reasonLower.includes('packaging damage');
+      const hasSevereKeywords = reasonLower.includes('expired') || reasonLower.includes('opened') || reasonLower.includes('unsealed') || reasonLower.includes('contamination') || reasonLower.includes('leak') || reasonLower.includes('broken');
+      
+      if (hasCosmeticKeywords && !hasSevereKeywords) {
+        aiSafetyScore = 80;
+        isVerifiedSafe = true;
+        finalStatus = (targetReceiverIds && targetReceiverIds.length > 0) || receiverId ? 'pending_receiver' : 'active';
+        aiAnalysisReason += " | [System Override: Approved minor outer cosmetic packaging damage]";
+      }
+    }
+
+    // Coerce AI-detected category to match the user's selected category domain to prevent validation failures
+    const isFood = (cat) => ['Food', 'Meat', 'Vegetables', 'Fruit', 'Dairy'].includes(cat);
+    if (!isFood(cleanCategoryInput) && isFood(finalCategory)) {
+      finalCategory = cleanCategoryInput;
+    }
+    if (cleanCategoryInput !== 'Medicine' && finalCategory === 'Medicine') {
+      finalCategory = cleanCategoryInput;
+    }
+    if (isFood(cleanCategoryInput) && !isFood(finalCategory)) {
+      finalCategory = cleanCategoryInput;
+    }
+    if (cleanCategoryInput === 'Medicine' && finalCategory !== 'Medicine') {
+      finalCategory = cleanCategoryInput;
+    }
+
     // AI Integration 3: Medicine Validation
     if (finalCategory === 'Medicine') {
       try {
@@ -451,7 +480,10 @@ router.get('/browse', optionalAuth, async (req, res) => {
     // Translation Integration
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      donations = await Promise.all(donations.map(async d => {
+      const donationsToTranslate = donations.slice(0, 20);
+      const remainingDonations = donations.slice(20);
+
+      const translated = await Promise.all(donationsToTranslate.map(async d => {
         try {
           const trTitle = await aiService.translate(d.title, 'ur');
           const trDesc = await aiService.translate(d.description, 'ur');
@@ -461,6 +493,7 @@ router.get('/browse', optionalAuth, async (req, res) => {
           return d._doc || d;
         }
       }));
+      donations = [...translated, ...remainingDonations.map(d => d._doc ? d._doc : d)];
     } else {
       donations = donations.map(d => d._doc ? d._doc : d);
     }
@@ -522,7 +555,10 @@ router.get('/nearby', optionalAuth, async (req, res) => {
     // Translation Integration
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      donations = await Promise.all(donations.map(async d => {
+      const donationsToTranslate = donations.slice(0, 20);
+      const remainingDonations = donations.slice(20);
+
+      const translated = await Promise.all(donationsToTranslate.map(async d => {
         try {
           const trTitle = await aiService.translate(d.title, 'ur');
           const trDesc = await aiService.translate(d.description, 'ur');
@@ -532,6 +568,7 @@ router.get('/nearby', optionalAuth, async (req, res) => {
           return d;
         }
       }));
+      donations = [...translated, ...remainingDonations];
     }
 
     res.json({
@@ -618,24 +655,67 @@ router.get('/ai-matched', authMiddleware, async (req, res) => {
     const recLng = receiver?.location?.lng !== undefined && receiver?.location?.lng !== null ? receiver.location.lng : null;
 
     // Call AI Service Match (Pass receiver lat/lng and items)
-    const aiRes = await aiService.match(recLat, recLng, items);
-
-    // Merge scores back
-    const matchMap = {};
-    aiRes.matches.forEach(m => matchMap[m.receiverId] = m);
-
-    const sortedDonations = donations
-      .map(d => ({
-        ...d._doc,
-        matchScore: matchMap[d._id.toString()]?.matchScore || 0,
-        distanceKm: matchMap[d._id.toString()]?.distanceKm || 0
-      }))
-      .sort((a, b) => b.matchScore - a.matchScore); // Highest first
+    let sortedDonations = [];
+    try {
+      const aiRes = await aiService.match(recLat, recLng, items);
+      const matchMap = {};
+      if (aiRes && aiRes.matches) {
+        aiRes.matches.forEach(m => matchMap[m.receiverId] = m);
+      }
+      sortedDonations = donations
+        .map(d => ({
+          ...d._doc,
+          matchScore: matchMap[d._id.toString()]?.matchScore || 0,
+          distanceKm: matchMap[d._id.toString()]?.distanceKm || 0
+        }))
+        .sort((a, b) => b.matchScore - a.matchScore); // Highest first
+    } catch (aiMatchErr) {
+      console.warn("⚠️ AI Service Match failed, using fallback heuristic matching:", aiMatchErr.message);
+      // Fallback matching: simple heuristic using distance and category matches
+      sortedDonations = donations.map(d => {
+        let matchScore = 50; // base score
+        
+        let distanceKm = 0;
+        if (recLat !== null && recLng !== null && d.location?.lat !== undefined && d.location?.lng !== undefined) {
+          // Haversine formula
+          const R = 6371; // radius of Earth in km
+          const dLat = (d.location.lat - recLat) * Math.PI / 180;
+          const dLng = (d.location.lng - recLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(recLat * Math.PI / 180) * Math.cos(d.location.lat * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          distanceKm = R * c;
+          
+          // Deduct score for distance
+          if (distanceKm < 5) matchScore += 30;
+          else if (distanceKm < 15) matchScore += 15;
+          else if (distanceKm < 30) matchScore += 5;
+          else matchScore -= Math.min(distanceKm / 2, 30);
+        }
+        
+        // Safety score addition
+        if (d.aiSafetyScore) {
+          matchScore += (d.aiSafetyScore - 50) / 2; // e.g. 98 -> +24
+        }
+        
+        matchScore = Math.max(0, Math.min(100, Math.round(matchScore)));
+        
+        return {
+          ...d._doc,
+          matchScore,
+          distanceKm: parseFloat(distanceKm.toFixed(2))
+        };
+      }).sort((a, b) => b.matchScore - a.matchScore);
+    }
 
     // Translation Integration
     const lang = req.query.lang || 'en';
     if (lang === 'ur') {
-      const translated = await Promise.all(sortedDonations.map(async d => {
+      const donationsToTranslate = sortedDonations.slice(0, 20);
+      const remainingDonations = sortedDonations.slice(20);
+
+      const translated = await Promise.all(donationsToTranslate.map(async d => {
         try {
           const trTitle = await aiService.translate(d.title, 'ur');
           const trDesc = await aiService.translate(d.description, 'ur');
@@ -645,7 +725,7 @@ router.get('/ai-matched', authMiddleware, async (req, res) => {
           return d;
         }
       }));
-      res.json(translated);
+      res.json([...translated, ...remainingDonations]);
     } else {
       res.json(sortedDonations);
     }

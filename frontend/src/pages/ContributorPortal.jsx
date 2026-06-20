@@ -7,7 +7,8 @@ import {
   RefreshCw, ArrowRight,
   LogOut, Search, Globe, Home, Activity, Calculator,
   UploadCloud, MapPin, ScanLine, Sun, Clock, Send, ShieldCheck,
-  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star, Camera, Menu
+  ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star, Camera, Menu,
+  TrendingUp
 } from "lucide-react";
 import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
@@ -72,6 +73,7 @@ const ContributorPortal = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedMapPost, setSelectedMapPost] = useState(null);
   const [receiverDemands, setReceiverDemands] = useState([]);
   const [aiMatches, setAiMatches] = useState([]);
   const [fallbackNGOs, setFallbackNGOs] = useState([]);
@@ -79,8 +81,9 @@ const ContributorPortal = () => {
   const [myDonations, setMyDonations] = useState([]);
   const [selectedDonation, setSelectedDonation] = useState(null);
   const [historyTab, setHistoryTab] = useState('active'); // active, completed, rejected
-  const [expandedCategories, setExpandedCategories] = useState({});
+  const [selectedHistoryCategory, setSelectedHistoryCategory] = useState('Grocery');
   const [donorNotifications, setDonorNotifications] = useState([]);
+  const [notifFilter, setNotifFilter] = useState('pending'); // pending, fulfilled
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [ratingComment, setRatingComment] = useState('');
@@ -108,7 +111,6 @@ const ContributorPortal = () => {
   const [isTranslatingDesc, setIsTranslatingDesc] = useState(false);
   const [translationError, setTranslationError] = useState('');
   const [isImageZoomed, setIsImageZoomed] = useState(false);
-  const [selectedHistoryCategory, setSelectedHistoryCategory] = useState(null);
   const [isDescriptionTranslated, setIsDescriptionTranslated] = useState(false);
   const originalDescriptionRef = useRef('');
 
@@ -155,6 +157,25 @@ const ContributorPortal = () => {
   const [aiResult, setAiResult] = useState(null);
   const [currentDonationId, setCurrentDonationId] = useState(null);
   const [aiKeywords, setAiKeywords] = useState([]);
+
+  // AI Demand Forecasting State
+  const [forecastData, setForecastData] = useState(null);
+  const [loadingForecast, setLoadingForecast] = useState(false);
+  const [forecastError, setForecastError] = useState('');
+
+  const fetchForecastData = async () => {
+    setLoadingForecast(true);
+    setForecastError('');
+    try {
+      const res = await axios.get(`${API}/api/ai/demand-forecast`);
+      setForecastData(res.data);
+    } catch (err) {
+      console.error('Forecast error:', err);
+      setForecastError(err.response?.data?.error || 'Failed to load demand forecast.');
+    } finally {
+      setLoadingForecast(false);
+    }
+  };
   const [selectedHistoryDonation, setSelectedHistoryDonation] = useState(null);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [selectedRating, setSelectedRating] = useState(0);
@@ -545,6 +566,7 @@ const ContributorPortal = () => {
       }, { headers: { 'x-auth-token': localStorage.getItem('token') } });
       alert(`Success! Dispatch Notification sent to ${post.receiverId?.name || 'the NGO'}. They will contact you shortly to coordinate.`);
       setSelectedPost(null);
+      setSelectedMapPost(null);
       setActiveTab('my_donations');
       setFile(null); setCategory(''); setLocation(''); setScanComplete(false);
       setCurrentDonationId(null);
@@ -592,13 +614,18 @@ const ContributorPortal = () => {
           <button className={`nav-tab ${activeTab === 'ai_dashboard' ? 'active' : ''}`} onClick={() => { setActiveTab('ai_dashboard'); fetchData(); }}>
             <Activity size={18} /> {lang === 'Eng' ? 'AI Dashboard' : 'اے آئی ڈیش بورڈ'}
           </button>
+          <button className={`nav-tab ${activeTab === 'ai_forecast' ? 'active' : ''}`} onClick={() => { setActiveTab('ai_forecast'); fetchForecastData(); }}>
+            <TrendingUp size={18} /> {lang === 'Eng' ? 'AI Forecast' : 'اے آئی پیشن گوئی'}
+          </button>
           <button className={`nav-tab ${activeTab === 'zakat' ? 'active' : ''}`} onClick={() => setActiveTab('zakat')}>
             <Calculator size={18} /> {lang === 'Eng' ? 'Zakat Calculator' : 'زکوٰۃ کیلکولیٹر'}
           </button>
           <button className={`nav-tab ${activeTab === 'my_donations' ? 'active' : ''}`} onClick={() => { setActiveTab('my_donations'); fetchData(); }}>
             <History size={18} /> {lang === 'Eng' ? 'My Donations' : 'میرے عطیات'}
-            {myDonations.length > 0 && (
-              <span style={{ marginLeft: 4, background: '#10b981', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>{myDonations.length}</span>
+            {myDonations.filter(d => d.status !== 'pending_receiver').length > 0 && (
+              <span style={{ marginLeft: 4, background: '#10b981', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
+                {myDonations.filter(d => d.status !== 'pending_receiver').length}
+              </span>
             )}
           </button>
           <button className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => { setActiveTab('notifications'); fetchData(); }}>
@@ -1069,290 +1096,268 @@ const ContributorPortal = () => {
             {!isScanning && scanComplete && aiResult && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-                {/* Status Hero Card */}
-                <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-xl)', padding: '2.5rem', position: 'relative', overflow: 'hidden', boxShadow: '0 12px 50px rgba(0,0,0,0.5)' }}>
-                  <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: 200, height: 200, background: 'radial-gradient(circle, rgba(255,255,255,0.07), transparent 70%)', pointerEvents: 'none' }} />
+                {/* Side-by-Side Unified Top Section */}
+                <div className="rp-dashboard-top-row">
                   
-                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'stretch', position: 'relative', zIndex: 1 }} className="rp-ai-hero-flex">
+                  {/* Left Column: Visual Scan Results */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     
-                    {/* Left Column (1/3 Weight): Click-to-Zoom Scanned Image */}
-                    {file?.preview && (
-                      <div style={{ flex: '0.8', minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <div 
-                          onClick={() => setIsImageZoomed(true)}
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            minHeight: '180px',
-                            maxHeight: '260px',
-                            borderRadius: '16px', 
-                            overflow: 'hidden', 
-                            border: '2px solid rgba(255,255,255,0.15)', 
-                            cursor: 'pointer', 
-                            position: 'relative',
-                            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-                            transition: 'all 0.3s ease'
-                          }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.borderColor = '#10b981';
-                            e.currentTarget.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.4)';
-                            e.currentTarget.querySelector('img').style.transform = 'scale(1.05)';
-                            e.currentTarget.querySelector('.zoom-hint').style.opacity = '1';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
-                            e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
-                            e.currentTarget.querySelector('img').style.transform = 'scale(1)';
-                            e.currentTarget.querySelector('.zoom-hint').style.opacity = '0';
-                          }}
-                        >
-                          <img 
-                            src={file.preview} 
-                            alt="Scanned item preview" 
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'all 0.3s ease', display: 'block' }} 
-                          />
-                          <div 
-                            className="zoom-hint"
-                            style={{
-                              position: 'absolute',
-                              inset: 0,
-                              background: 'rgba(0,0,0,0.4)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              opacity: 0,
-                              transition: 'all 0.3s ease',
-                              color: 'white',
-                              fontWeight: 700,
-                              fontSize: '0.85rem',
-                              gap: '6px'
-                            }}
-                          >
-                            🔍 {t(lang, 'Click to Zoom', 'بڑا کرنے کے لیے کلک کریں')}
-                          </div>
+                    {/* Status Hero Card (Scanned Image, Title, Score gauge) */}
+                    <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-xl)', padding: '1.75rem', position: 'relative', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {file?.preview && (
+                        <div style={{ width: '130px', height: '130px', borderRadius: '12px', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.15)', cursor: 'pointer', position: 'relative', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)', flexShrink: 0 }} onClick={() => setIsImageZoomed(true)}>
+                          <img src={file.preview} alt="Scanned preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.3s ease', color: 'white', fontWeight: 700, fontSize: '0.75rem' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0}>🔍 Zoom</div>
                         </div>
-                        <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, letterSpacing: '0.5px' }}>
-                          📷 {t(lang, 'Scanned Image', 'اسکین شدہ تصویر')}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Middle Column: Title & Score Dial */}
-                    <div style={{ flex: '1.2', minWidth: '260px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1.5rem' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                          <span style={{ background: 'rgba(255,255,255,0.15)', color: 'white', padding: '4px 12px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.5px' }}>✦ {t(lang, 'System Check', 'سسٹم چیک')}</span>
-                          <span style={{ background: aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.25)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.25)' : 'rgba(239,68,68,0.25)', color: aiResult.recommendation === 'Accept' ? '#6ee7b7' : aiResult.recommendation === 'Review' ? '#fde047' : '#fca5a5', padding: '4px 12px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, border: `1px solid ${aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.4)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.4)' : 'rgba(239,68,68,0.4)'}` }}>
-                            {aiResult.recommendation === 'Accept' ? '✅' : aiResult.recommendation === 'Review' ? '⚠️' : '❌'} {aiResult.recommendation === 'Accept' ? t(lang, 'Approved', 'منظور شدہ') : aiResult.recommendation === 'Review' ? t(lang, 'Needs Review', 'جائزہ طلب') : t(lang, 'Rejected', 'مسترد')}
-                          </span>
-                        </div>
-                        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '2.1rem', fontWeight: 900, color: 'white', marginBottom: '4px', letterSpacing: '-0.5px' }}>{aiResult.itemName}</h2>
-                        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: 0 }}>Verified Class &amp; Parameters Evaluated</p>
-                      </div>
-
-                      {/* Gorgeous Modern Score Gauge dial */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: 'rgba(255,255,255,0.06)', borderRadius: '18px', padding: '1.25rem 1.5rem', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', backdropFilter: 'blur(10px)' }}>
-                        <div style={{ position: 'relative', width: '68px', height: '68px', flexShrink: 0 }}>
-                          <svg style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                            <circle cx="34" cy="34" r="28" stroke="rgba(255,255,255,0.08)" strokeWidth="5.5" fill="transparent" />
-                            <circle cx="34" cy="34" r="28" stroke={aiResult.recommendation === 'Rejected' ? '#ef4444' : aiResult.recommendation === 'Review' ? '#f59e0b' : '#10b981'} strokeWidth="5.5" fill="transparent" strokeDasharray={`${2 * Math.PI * 28}`} strokeDashoffset={`${2 * Math.PI * 28 * (1 - aiResult.safetyScore / 100)}`} style={{ strokeLinecap: 'round', transition: 'stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1)' }} />
-                          </svg>
-                          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: '1rem', fontWeight: 900, color: 'white', fontFamily: 'var(--font-heading)', lineHeight: 1 }}>{aiResult.safetyScore}%</span>
-                          </div>
-                        </div>
+                      )}
+                      
+                      <div style={{ flex: 1, minWidth: '180px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            <Zap size={14} color="#10b981" /> Safety Index
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                            <span style={{ background: 'rgba(255,255,255,0.15)', color: 'white', padding: '2px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700 }}>✦ SYSTEM CHECK</span>
+                            <span style={{ background: aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.25)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.25)' : 'rgba(239,68,68,0.25)', color: aiResult.recommendation === 'Accept' ? '#6ee7b7' : aiResult.recommendation === 'Review' ? '#fde047' : '#fca5a5', padding: '2px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700, border: `1px solid ${aiResult.recommendation === 'Accept' ? 'rgba(16,185,129,0.4)' : aiResult.recommendation === 'Review' ? 'rgba(234,179,8,0.4)' : 'rgba(239,68,68,0.4)'}` }}>
+                              {aiResult.recommendation === 'Accept' ? 'Approved' : aiResult.recommendation === 'Review' ? 'Needs Review' : 'Rejected'}
+                            </span>
                           </div>
-                          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: aiResult.recommendation === 'Rejected' ? '#fca5a5' : aiResult.recommendation === 'Review' ? '#fde047' : '#6ee7b7', marginTop: '2px', display: 'block' }}>
-                            {aiResult.recommendation === 'Rejected' ? t(lang, 'System Blocked', 'سسٹم بلاکڈ') : aiResult.recommendation === 'Review' ? t(lang, 'Attention Needed', 'توجہ درکار') : t(lang, 'Fully Verified', 'مکمل تصدیق شدہ')}
-                          </span>
+                          <h2 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'white', margin: 0 }}>{aiResult.itemName}</h2>
+                        </div>
+
+                        {/* Dial */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '8px 12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
+                            <svg style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                              <circle cx="24" cy="24" r="20" stroke="rgba(255,255,255,0.08)" strokeWidth="4" fill="transparent" />
+                              <circle cx="24" cy="24" r="20" stroke={aiResult.recommendation === 'Rejected' ? '#ef4444' : aiResult.recommendation === 'Review' ? '#f59e0b' : '#10b981'} strokeWidth="4" fill="transparent" strokeDasharray={`${2 * Math.PI * 20}`} strokeDashoffset={`${2 * Math.PI * 20 * (1 - aiResult.safetyScore / 100)}`} style={{ strokeLinecap: 'round' }} />
+                            </svg>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 900, color: 'white' }}>
+                              {aiResult.safetyScore}%
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Safety Index</span>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: aiResult.recommendation === 'Rejected' ? '#fca5a5' : aiResult.recommendation === 'Review' ? '#fde047' : '#6ee7b7', display: 'block' }}>
+                              {aiResult.recommendation === 'Rejected' ? 'System Blocked' : aiResult.recommendation === 'Review' ? 'Attention Needed' : 'Fully Verified'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Right Column: AI Analysis Report glass card */}
-                    <div style={{ flex: '1.5', minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center' }}>
-                      <div style={{ width: '100%', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '20px', padding: '1.5rem', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.92rem', marginBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem' }}>
-                          <ShieldCheck size={18} /> {t(lang, 'AI Analysis Report', 'اے آئی تجزیاتی رپورٹ')}
+                    {/* Metric Cards Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                      {[
+                        { label: t(lang, 'Category', 'زمرہ'), value: aiResult.detectedCategory, icon: '📦' },
+                        { label: t(lang, 'Condition', 'حالت'), value: aiResult.condition, icon: '🔍' },
+                        { label: t(lang, 'Freshness', 'تازگی'), value: aiResult.freshness, icon: '🌿' },
+                        { label: t(lang, 'Est. Quantity', 'تخمینہ مقدار'), value: aiResult.estimatedItems, icon: '📊' },
+                      ].map(m => (
+                        <div key={m.label} style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-lg)', padding: '1rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '1.75rem' }}>{m.icon}</span>
+                          <div>
+                            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>{m.label}</div>
+                            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--primary)', fontSize: '0.9rem' }}>{m.value}</div>
+                          </div>
                         </div>
-                        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.88rem', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
-                          "{aiResult.safetyNotes}"
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right Column: AI Analysis, Description & Recommendations */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    
+                    {/* AI Analysis Report */}
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6ee7b7', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
+                        <ShieldCheck size={16} /> {t(lang, 'AI Analysis Report', 'اے آئی تجزیاتی رپورٹ')}
+                      </div>
+                      <p style={{ color: 'var(--text-main)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, fontStyle: 'italic' }}>
+                        "{aiResult.safetyNotes}"
+                      </p>
+                    </div>
+
+                    {/* Item Description side card */}
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
+                        ✍️ {t(lang, 'Item Description', 'آئٹم کی تفصیل')}
+                      </div>
+                      {description ? (
+                        <p style={{ color: 'var(--text-main)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
+                          {description}
                         </p>
+                      ) : (
+                        <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', margin: 0, fontStyle: 'italic' }}>
+                          No description provided for this item.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* AI Recommendation */}
+                    <div style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 'var(--radius-lg)', padding: '1rem', display: 'flex', gap: '10px' }}>
+                      <span style={{ fontSize: '1.25rem' }}>🤖</span>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t(lang, 'AI Recommendation', 'اے آئی تجویز')}</div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.4, margin: '2px 0 0' }}>{t(lang, aiResult.matchReason, aiResult.matchReason)}</p>
                       </div>
                     </div>
+
                   </div>
                 </div>
 
-                {/* Detail Metrics Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem' }}>
-                  {[
-                    { label: t(lang, 'Category', 'زمرہ'), value: aiResult.detectedCategory, icon: '📦' },
-                    { label: t(lang, 'Condition', 'حالت'), value: aiResult.condition, icon: '🔍' },
-                    { label: t(lang, 'Freshness', 'تازگی'), value: aiResult.freshness, icon: '🌿' },
-                    { label: t(lang, 'Est. Quantity', 'تخمینہ مقدار'), value: aiResult.estimatedItems, icon: '📊' },
-                  ].map(m => (
-                    <div key={m.label} style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-lg)', padding: '1.25rem', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.75rem', marginBottom: '8px' }}>{m.icon}</div>
-                      <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-dim)', fontWeight: 700, marginBottom: '4px' }}>{m.label}</div>
-                      <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, color: 'var(--primary)', fontSize: '0.95rem' }}>{m.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Item Description (aligned symmetrically alongside metrics grid) */}
-                <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', padding: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>
-                    ✍️ {t(lang, 'Item Description', 'آئٹم کی تفصیل')}
-                  </div>
-                  {description ? (
-                    <p style={{ color: 'var(--text-main)', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                      {description}
+                {/* Suggestions and Map side-by-side Row */}
+                <div className="rp-dashboard-map-row">
+                  
+                  {/* Left Column: Matched Demand Suggestions list */}
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', padding: '1.5rem', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      🎯 {t(lang, 'AI-Matched Receiver Demands', 'اے آئی سے مماثل وصول کنندگان کی مانگ')}
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '1.25rem' }}>
+                      {t(lang, 'Based on your', 'آپ کے')} <strong style={{ color: 'var(--primary)' }}>{aiResult.detectedCategory}</strong> {t(lang, 'donation, these receivers need your help most:', 'عطیے ki buniyad par, in receivers ko aapki sabse zyada zaroorat hai:')}
                     </p>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-dim)', fontSize: '0.82rem', fontStyle: 'italic', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 12px' }}>
-                      <span>ℹ️</span>
-                      <span>{t(lang, 'No description provided for this item. You can add more details next time to help receivers.', 'اس آئٹم کے لیے کوئی تفصیل فراہم نہیں کی گئی ہے۔ آپ وصول کنندگان کی مدد کے لیے اگلی بار مزید تفصیلات شامل کر سکتے ہیں۔')}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* AI Match Reason */}
-                <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 'var(--radius-lg)', padding: '1.25rem', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>🤖</span>
-                  <div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>{t(lang, 'AI Recommendation', 'اے آئی تجویز')}</div>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>{t(lang, aiResult.matchReason, aiResult.matchReason)}</p>
-                  </div>
-                </div>
-
-                {/* Matched Demand Posts */}
-                <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-xl)', padding: '1.5rem' }}>
-                  <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🎯 {t(lang, 'AI-Matched Receiver Demands', 'اے آئی سے مماثل وصول کنندگان کی مانگ')}
-                  </h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>{t(lang, 'Based on your', 'آپ کے')} <strong style={{ color: 'var(--primary)' }}>{aiResult.detectedCategory}</strong> {t(lang, 'donation, these receivers need your help most:', 'عطیے کی بنیاد پر، ان وصول کنندگان کو آپ کی سب سے زیادہ ضرورت ہے:')}</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {(() => {
-                      // Log the aiMatches array immediately before rendering (Step 2)
-                      console.log("CONTRIBUTOR PORTAL: aiMatches before rendering (UI state):", aiMatches);
-                      return null;
-                    })()}
-                    {aiMatches.length > 0 ? (
-                      aiMatches.slice(0, 5).map(match => (
-                        <div key={match._id}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '1rem 1.25rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 'var(--radius-lg)', cursor: 'pointer', transition: 'all 0.2s', flexWrap: 'wrap' }}
-                          onClick={() => setSelectedPost(match)}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; e.currentTarget.style.transform = 'translateX(4px)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.transform = 'translateX(0)'; }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 200 }}>
-                            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                              {match.receiverId?.profilePic ? (
-                                <img src={match.receiverId.profilePic} alt={match.receiverId.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : (
-                                <UserCircle size={22} color="#10b981" />
-                              )}
-                            </div>
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <p style={{ fontWeight: 700, color: 'var(--text-main)', margin: 0, fontSize: '0.93rem' }}>{match.title}</p>
-                                <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '99px', background: match.priority === 1 ? 'rgba(16,185,129,0.15)' : 'rgba(234,179,8,0.15)', color: match.priority === 1 ? '#10b981' : '#eab308', fontWeight: 700 }}>
-                                  {match.priority === 1 ? t(lang, 'Exact Match', 'عین مماثلت') : t(lang, 'Category Match', 'زمرہ مماثلت')}
-                                </span>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', maxH: '420px', flex: 1, paddingRight: '4px' }}>
+                      {aiMatches.length > 0 ? (
+                        aiMatches.slice(0, 5).map(match => (
+                          <div key={match._id}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.85rem 1rem', background: selectedPost?._id === match._id ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${selectedPost?._id === match._id ? '#10b981' : 'rgba(255,255,255,0.06)'}`, borderRadius: 'var(--radius-lg)', cursor: 'pointer', transition: 'all 0.2s' }}
+                            onClick={() => setSelectedPost(match)}
+                            onMouseEnter={e => { if (selectedPost?._id !== match._id) e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; }}
+                            onMouseLeave={e => { if (selectedPost?._id !== match._id) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                              <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                                {match.receiverId?.profilePic ? (
+                                  <img src={match.receiverId.profilePic} alt={match.receiverId.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  <UserCircle size={18} color="#10b981" />
+                                )}
                               </div>
-                              <p style={{ color: 'var(--text-dim)', margin: 0, fontSize: '0.78rem', marginTop: '2px' }}>
-                                {match.receiverId?.name || 'Verified NGO'} • {match.travelTimeMin} min travel duration ({match.distanceKm} km)
-                              </p>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <p style={{ fontWeight: 700, color: 'var(--text-main)', margin: 0, fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{match.title}</p>
+                                </div>
+                                <p style={{ color: 'var(--text-dim)', margin: 0, fontSize: '0.75rem', marginTop: '2px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  {match.receiverId?.name || 'Verified NGO'} • {match.travelTimeMin}m ({match.distanceKm} km)
+                                </p>
+                              </div>
                             </div>
+                            <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '99px', background: match.priority === 1 ? 'rgba(16,185,129,0.15)' : 'rgba(234,179,8,0.15)', color: match.priority === 1 ? '#10b981' : '#eab308', fontWeight: 700, flexShrink: 0 }}>
+                              {match.priority === 1 ? 'Exact' : 'Category'}
+                            </span>
                           </div>
-                          <button className="btn btn-primary" style={{ padding: '7px 16px', fontSize: '0.82rem', flexShrink: 0 }}>
-                            <Send size={13} /> {t(lang, 'Donate', 'عطیہ کریں')}
+                        ))
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-dim)', border: '1px dashed rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-lg)', background: 'rgba(239,68,68,0.02)', fontSize: '0.82rem' }}>
+                            ⚠️ {t(lang, 'No matching receiver requests found.', 'کوئی مماثل وصول کنندہ کی درخواست نہیں ملی۔')}
+                          </div>
+                          
+                          {fallbackNGOs.length > 0 && (
+                            <>
+                              <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '4px 0', fontWeight: 700 }}>
+                                💡 {t(lang, 'Approved Fallback NGOs nearby:', 'قریبی منظور شدہ این جی اوز:')}
+                              </p>
+                              {fallbackNGOs.map(ngoItem => {
+                                const mockPost = {
+                                  _id: `ngo_${ngoItem.ngo?._id}`,
+                                  receiverId: ngoItem.ngo,
+                                  title: `Direct Donation to ${ngoItem.ngo?.name}`,
+                                  desc: `Offering direct donation of ${aiResult?.itemName || 'items'}.`,
+                                  urgency: 'Medium',
+                                  createdAt: new Date().toISOString()
+                                };
+                                return (
+                                  <div key={ngoItem.ngo?._id}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.85rem 1rem', background: selectedPost?.receiverId?._id === ngoItem.ngo?._id ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${selectedPost?.receiverId?._id === ngoItem.ngo?._id ? '#10b981' : 'rgba(255,255,255,0.06)'}`, borderRadius: 'var(--radius-lg)', cursor: 'pointer', transition: 'all 0.2s' }}
+                                    onClick={() => setSelectedPost(mockPost)}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                                      <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                                        {ngoItem.ngo?.profilePic ? (
+                                          <img src={ngoItem.ngo.profilePic} alt={ngoItem.ngo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                          <Building2 size={18} color="#10b981" />
+                                        )}
+                                      </div>
+                                      <div style={{ minWidth: 0 }}>
+                                        <p style={{ fontWeight: 700, color: 'var(--text-main)', margin: 0, fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{ngoItem.ngo?.name}</p>
+                                        <p style={{ color: 'var(--text-dim)', margin: 0, fontSize: '0.75rem', marginTop: '2px' }}>
+                                          {ngoItem.travelTimeMin}m ({ngoItem.distanceKm} km)
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '99px', background: 'rgba(16,185,129,0.15)', color: '#10b981', fontWeight: 700, flexShrink: 0 }}>NGO</span>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+ 
+                  {/* Right Column: Smart Map & Selected NGO Details inline */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    
+                    <SmartMap
+                      category={aiResult.detectedCategory}
+                      userLat={donLat}
+                      userLng={donLng}
+                      aiStatus={aiResult.safetyScore >= 50 ? 'active' : 'rejected'}
+                      onSelectReceiver={(rec) => setSelectedMapPost(rec)}
+                      receiverList={
+                        aiMatches.length > 0
+                           ? aiMatches
+                          : fallbackNGOs.map(f => ({
+                              _id: f.ngo?._id,
+                              title: `Approved NGO: ${f.ngo?.name}`,
+                              receiverId: f.ngo,
+                              distanceKm: f.distanceKm,
+                              travelTimeMin: f.travelTimeMin
+                            }))
+                      }
+                    />
+ 
+                    {/* Selected NGO Details Panel inline (Picture 5 layout) */}
+                    {selectedMapPost && (
+                      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '18px', padding: '1.5rem', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
+                          <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#6ee7b7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Building2 size={18} /> Selected NGO Receiver:
+                          </h4>
+                          <button onClick={() => setSelectedMapPost(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={16} /></button>
+                        </div>
+ 
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem', fontSize: '0.9rem', color: '#cbd5e1' }}>
+                          <p style={{ margin: 0 }}><strong style={{ color: 'white' }}>Name:</strong> {selectedMapPost.receiverId?.name || selectedMapPost.title}</p>
+                          <p style={{ margin: 0 }}><strong style={{ color: 'white' }}>Email:</strong> {selectedMapPost.receiverId?.email || 'N/A'}</p>
+                          <p style={{ margin: 0 }}><strong style={{ color: 'white' }}>Phone:</strong> {selectedMapPost.receiverId?.phone || 'N/A'}</p>
+                          {selectedMapPost.receiverId?.location?.address && (
+                            <p style={{ margin: 0 }}><strong style={{ color: 'white' }}>Address:</strong> {selectedMapPost.receiverId.location.address}</p>
+                          )}
+                          {selectedMapPost.title && selectedMapPost.title.indexOf('Direct Donation') === -1 && (
+                            <p style={{ margin: 0, fontStyle: 'italic', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px', borderLeft: '3px solid #10b981' }}>
+                              <strong style={{ color: 'white' }}>Requested Items:</strong> "{selectedMapPost.title}"
+                            </p>
+                          )}
+                        </div>
+ 
+                        <div className="pm-actions-row" style={{ marginTop: '1.25rem' }}>
+                          <button className="btn btn-outline" onClick={() => setSelectedMapPost(null)}>
+                            Cancel
+                          </button>
+                          <button className="btn btn-primary" onClick={() => handleSendNotification(selectedMapPost)}>
+                            <Send size={14} /> Dispatch My Donation Here
                           </button>
                         </div>
-                      ))
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', border: '1px dashed rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-lg)', background: 'rgba(239,68,68,0.02)', fontSize: '0.9rem' }}>
-                          ⚠️ {t(lang, 'No matching receiver requests found.', 'کوئی مماثل وصول کنندہ کی درخواست نہیں ملی۔')}
-                        </div>
-                        
-                        {fallbackNGOs.length > 0 ? (
-                          <>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '4px 0', fontWeight: 650 }}>
-                              💡 {t(lang, 'Approved Fallback NGOs nearby:', 'قریبی منظور شدہ این جی اوز:')}
-                            </p>
-                            {fallbackNGOs.map(ngoItem => {
-                              const mockPost = {
-                                _id: `ngo_${ngoItem.ngo?._id}`,
-                                receiverId: ngoItem.ngo,
-                                title: `Direct Donation to ${ngoItem.ngo?.name}`,
-                                desc: `Offering direct donation of ${aiResult?.itemName || 'items'}.`,
-                                urgency: 'Medium',
-                                createdAt: new Date().toISOString()
-                              };
-                              return (
-                                <div key={ngoItem.ngo?._id}
-                                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '1rem 1.25rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-lg)', cursor: 'pointer', transition: 'all 0.2s', flexWrap: 'wrap' }}
-                                  onClick={() => setSelectedPost(mockPost)}
-                                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; e.currentTarget.style.transform = 'translateX(4px)'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'translateX(0)'; }}
-                                >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 200 }}>
-                                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                                      {ngoItem.ngo?.profilePic ? (
-                                        <img src={ngoItem.ngo.profilePic} alt={ngoItem.ngo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      ) : (
-                                        <Building2 size={22} color="#10b981" />
-                                      )}
-                                    </div>
-                                    <div>
-                                      <p style={{ fontWeight: 700, color: 'var(--text-main)', margin: 0, fontSize: '0.93rem' }}>{ngoItem.ngo?.name}</p>
-                                      <p style={{ color: 'var(--text-dim)', margin: 0, fontSize: '0.78rem', marginTop: '2px' }}>
-                                        {t(lang, 'Approved NGO', 'منظور شدہ این جی او')} • {ngoItem.travelTimeMin} min travel duration ({ngoItem.distanceKm} km)
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button className="btn btn-primary" style={{ padding: '7px 16px', fontSize: '0.82rem', flexShrink: 0 }}>
-                                    <Send size={13} /> {t(lang, 'Donate', 'عطیہ کریں')}
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </>
-                        ) : (
-                          <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-                            {t(lang, 'No approved NGOs found in safe travel range.', 'محفوظ سفری حد میں کوئی منظور شدہ این جی اوز نہیں ملی۔')}
-                          </div>
-                        )}
                       </div>
                     )}
+
                   </div>
                 </div>
 
-                {/* AI Smart Map Embedded Section */}
-                <SmartMap
-                  category={aiResult.detectedCategory}
-                  userLat={donLat}
-                  userLng={donLng}
-                  aiStatus={aiResult.safetyScore >= 50 ? 'active' : 'rejected'}
-                  onSelectReceiver={(rec) => setSelectedPost(rec)}
-                  receiverList={
-                    aiMatches.length > 0
-                      ? aiMatches
-                      : fallbackNGOs.map(f => ({
-                          _id: f.ngo?._id,
-                          title: `Approved NGO: ${f.ngo?.name}`,
-                          receiverId: f.ngo,
-                          distanceKm: f.distanceKm,
-                          travelTimeMin: f.travelTimeMin
-                        }))
-                  }
-                />
-
-                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
                   <button
                     className="btn btn-secondary"
                     onClick={() => {
@@ -1397,7 +1402,7 @@ const ContributorPortal = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <h2 style={{ margin: 0 }}>{t(lang, 'My Donation History', 'میری عطیات کی تاریخ')}</h2>
                 <span style={{ background: '#f0fdf4', color: '#065f46', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
-                  {myDonations.length} total
+                  {myDonations.filter(d => d.status !== 'pending_receiver').length} total
                 </span>
               </div>
               <button
@@ -1444,18 +1449,31 @@ const ContributorPortal = () => {
                   const filtered = myDonations.filter(d => {
                     if (historyTab === 'rejected') return d.status === 'rejected';
                     if (historyTab === 'completed') return d.status === 'completed' || d.status === 'delivered';
-                    return d.status !== 'rejected' && d.status !== 'completed' && d.status !== 'delivered';
+                    return d.status !== 'rejected' && d.status !== 'completed' && d.status !== 'delivered' && d.status !== 'pending_receiver';
                   });
 
                   if (filtered.length === 0) {
                     return <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No {historyTab} donations found.</div>;
                   }
 
-                  // Group filtered donations by category
-                  const groups = {};
+                  // Define official 5 categories
+                  const OFFICIAL_CATEGORIES = ['Grocery', 'Food', 'Household', 'Medicine', 'Clothes'];
+
+                  // Group filtered donations by category (forcing Other/Meat into standard ones)
+                  const groups = {
+                    Grocery: [],
+                    Food: [],
+                    Household: [],
+                    Medicine: [],
+                    Clothes: []
+                  };
+
                   filtered.forEach(d => {
-                    const cat = d.category || 'Grocery';
-                    if (!groups[cat]) groups[cat] = [];
+                    let cat = d.category || 'Grocery';
+                    if (cat === 'Meat') cat = 'Food';
+                    if (!OFFICIAL_CATEGORIES.includes(cat)) {
+                      cat = 'Grocery';
+                    }
                     groups[cat].push(d);
                   });
 
@@ -1467,51 +1485,82 @@ const ContributorPortal = () => {
                     Grocery: '🛒'
                   };
 
-                  return Object.keys(groups).map(cat => {
-                    const donsInCat = groups[cat];
-                    const isExpanded = !!expandedCategories[cat];
-                    const icon = catIcons[cat] || '📦';
+                  const countInSelected = groups[selectedHistoryCategory]?.length || 0;
 
-                    return (
-                      <div key={cat} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', transition: 'all 0.3s ease' }}>
-                        {/* Summary Header Card */}
-                        <div 
-                          onClick={() => setExpandedCategories(prev => ({ ...prev, [cat]: !prev[cat] }))}
-                          style={{ 
-                            padding: '1.25rem 1.5rem', 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
-                            cursor: 'pointer', 
-                            background: isExpanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)',
-                            borderBottom: isExpanded ? '1px solid rgba(255,255,255,0.08)' : 'none',
-                            transition: 'all 0.25s ease'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = isExpanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)'; }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ fontSize: '1.8rem' }}>{icon}</span>
-                            <div>
-                              <h3 style={{ margin: 0, fontWeight: 800, color: '#f1f5f9', fontSize: '1.15rem' }}>{t(lang, cat, cat)}</h3>
-                              <span style={{ background: 'rgba(16,185,129,0.15)', color: '#6ee7b7', fontSize: '0.72rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, display: 'inline-block', marginTop: '4px' }}>
-                                {donsInCat.length} {donsInCat.length === 1 ? 'Item' : 'Items'}
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {/* Category cards grid - 5 boxes exactly */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '1rem', marginBottom: '0.5rem' }}>
+                        {OFFICIAL_CATEGORIES.map(cat => {
+                          const donsInCat = groups[cat] || [];
+                          const count = donsInCat.length;
+                          const icon = catIcons[cat] || '📦';
+                          const isSelected = selectedHistoryCategory === cat;
+
+                          return (
+                            <div 
+                              key={cat}
+                              onClick={() => setSelectedHistoryCategory(cat)}
+                              style={{ 
+                                padding: '1.25rem 1rem', 
+                                display: 'flex', 
+                                flexDirection: 'column',
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                cursor: 'pointer', 
+                                background: isSelected ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.02)',
+                                border: `1.5px solid ${isSelected ? '#10b981' : 'rgba(255,255,255,0.07)'}`,
+                                borderRadius: '18px',
+                                boxShadow: isSelected ? '0 8px 24px rgba(16,185,129,0.15)' : '0 4px 12px rgba(0,0,0,0.15)',
+                                transition: 'all 0.25s ease',
+                                transform: isSelected ? 'translateY(-2px)' : 'none'
+                              }}
+                              onMouseEnter={e => { 
+                                if (!isSelected) {
+                                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; 
+                                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; 
+                                }
+                              }}
+                              onMouseLeave={e => { 
+                                if (!isSelected) {
+                                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; 
+                                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; 
+                                }
+                              }}
+                            >
+                              <span style={{ fontSize: '2rem', marginBottom: '8px' }}>{icon}</span>
+                              <h3 style={{ margin: 0, fontWeight: 800, color: isSelected ? '#34d399' : '#f1f5f9', fontSize: '1rem' }}>{t(lang, cat, cat)}</h3>
+                              <span style={{ 
+                                background: count > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', 
+                                color: count > 0 ? '#6ee7b7' : '#94a3b8', 
+                                fontSize: '0.72rem', 
+                                fontWeight: 800, 
+                                padding: '2px 8px', 
+                                borderRadius: 99, 
+                                display: 'inline-block', 
+                                marginTop: '6px' 
+                              }}>
+                                {count} {count === 1 ? 'Item' : 'Items'}
                               </span>
                             </div>
-                          </div>
+                          );
+                        })}
+                      </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
-                            <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{isExpanded ? t(lang, 'Collapse', 'بند کریں') : t(lang, 'Expand', 'کھولیں')}</span>
-                            <span style={{ transition: 'transform 0.3s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}>
-                              ▶
-                            </span>
-                          </div>
-                        </div>
+                      {/* Expanded selected category items list */}
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <h4 style={{ color: '#94a3b8', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '1.2rem' }}>{catIcons[selectedHistoryCategory]}</span>
+                          <span>{t(lang, selectedHistoryCategory, selectedHistoryCategory)} {t(lang, 'Donations', 'عطیات')}</span>
+                        </h4>
 
-                        {/* Collapsible content (in-place) */}
-                        {isExpanded && (
-                          <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.01)' }}>
-                            {donsInCat.map(don => {
+                        {countInSelected === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '3.5rem 2rem', color: '#64748b', background: 'rgba(255,255,255,0.01)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.06)' }}>
+                            No {historyTab} {selectedHistoryCategory} donations found.
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {(groups[selectedHistoryCategory] || []).map(don => {
                               const status = don.status;
                               const statusConfig = {
                                 pending_receiver: { label: '⏳ Pending Review', bg: '#fef9c3', color: '#713f12' },
@@ -1522,7 +1571,23 @@ const ContributorPortal = () => {
                               }[status] || { label: status, bg: '#f1f5f9', color: '#475569' };
 
                               return (
-                                <div key={don._id} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => setSelectedHistoryDonation(don)} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                                <div 
+                                  key={don._id} 
+                                  style={{ 
+                                    background: 'rgba(255,255,255,0.02)', 
+                                    borderRadius: '16px', 
+                                    border: '1px solid rgba(255,255,255,0.07)', 
+                                    overflow: 'hidden', 
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    cursor: 'pointer', 
+                                    transition: 'all 0.2s' 
+                                  }} 
+                                  onClick={() => setSelectedHistoryDonation(don)} 
+                                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
+                                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                >
                                   {/* Status bar */}
                                   <div style={{ background: statusConfig.bg, padding: '8px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ color: statusConfig.color, fontWeight: 700, fontSize: '0.85rem' }}>{statusConfig.label}</span>
@@ -1606,8 +1671,8 @@ const ContributorPortal = () => {
                           </div>
                         )}
                       </div>
-                    );
-                  });
+                    </div>
+                  );
                 })()}
               </div>
             )}
@@ -1636,146 +1701,196 @@ const ContributorPortal = () => {
               {t(lang, 'Track the acceptance and fulfillment status of your matched donations.', 'اپنے مماثل عطیات کی قبولیت اور تکمیل کی حیثیت کو ٹریک کریں۔')}
             </p>
 
-            {donorNotifications.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
-                <Bell size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
-                <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>{t(lang, 'No Notifications Yet', 'ابھی تک کوئی اطلاع نہیں ہے')}</h3>
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t(lang, 'Your donation status updates will appear here.', 'آپ کے عطیہ کی حیثیت کی اپ ڈیٹس یہاں ظاہر ہوں گی۔')}</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {donorNotifications.map(notif => {
-                  const isAccepted = notif.status === 'accepted';
-                  const isRejected = notif.status === 'rejected';
-                  const isPending = notif.status === 'pending';
-                  const isCompleted = notif.status === 'completed';
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+              <button
+                style={{
+                  background: notifFilter === 'pending' ? '#10b981' : 'transparent',
+                  color: notifFilter === 'pending' ? 'white' : '#64748b',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onClick={() => setNotifFilter('pending')}
+              >
+                {t(lang, 'Pending Review', 'زیر جائزہ')}
+              </button>
+              <button
+                style={{
+                  background: notifFilter === 'fulfilled' ? '#3b82f6' : 'transparent',
+                  color: notifFilter === 'fulfilled' ? 'white' : '#64748b',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onClick={() => setNotifFilter('fulfilled')}
+              >
+                {t(lang, 'Fulfilled / Resolved', 'تکمیل شدہ')}
+              </button>
+            </div>
 
-                  // Styles depending on status
-                  let borderLeftColor = '#64748b';
-                  let statusBg = '#f1f5f9';
-                  let statusColor = '#475569';
-                  let statusLabel = t(lang, 'Notification', 'اطلاع');
+            {(() => {
+              const filteredNotifs = donorNotifications.filter(notif => {
+                if (notifFilter === 'fulfilled') {
+                  return notif.status === 'accepted' || notif.status === 'completed' || notif.status === 'rejected';
+                }
+                return notif.status === 'pending';
+              });
 
-                  if (isAccepted) {
-                    borderLeftColor = '#10b981';
-                    statusBg = '#e0f2fe';
-                    statusColor = '#0369a1';
-                    statusLabel = t(lang, 'Fulfillment Accepted', 'قبول کر لیا گیا');
-                  } else if (isRejected) {
-                    borderLeftColor = '#ef4444';
-                    statusBg = '#fee2e2';
-                    statusColor = '#991b1b';
-                    statusLabel = t(lang, 'Fulfillment Declined', 'مسترد کر دیا گیا');
-                  } else if (isPending) {
-                    borderLeftColor = '#f59e0b';
-                    statusBg = '#fef9c3';
-                    statusColor = '#713f12';
-                    statusLabel = t(lang, 'Pending Review', 'زیر التوا');
-                  } else if (isCompleted) {
-                    borderLeftColor = '#3b82f6';
-                    statusBg = '#dcfce3';
-                    statusColor = '#166534';
-                    statusLabel = t(lang, 'Fulfillment Completed', 'تکمیل شدہ');
-                  }
+              if (filteredNotifs.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <Bell size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                    <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>
+                      {notifFilter === 'pending' ? t(lang, 'No Pending Notifications', 'کوئی زیر التوا اطلاع نہیں ہے') : t(lang, 'No Fulfilled Notifications', 'کوئی مکمل شدہ اطلاع نہیں ہے')}
+                    </h3>
+                    <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t(lang, 'Your status updates will appear here.', 'آپ کے عطیہ کی حیثیت کی اپ ڈیٹس یہاں ظاہر ہوں گی۔')}</p>
+                  </div>
+                );
+              }
 
-                  return (
-                    <div
-                      key={notif._id}
-                      style={{
-                        background: 'rgba(255,255,255,0.02)',
-                        borderRadius: '16px',
-                        border: '1px solid rgba(255,255,255,0.07)',
-                        borderLeft: `5px solid ${borderLeftColor}`,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                        overflow: 'hidden',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {/* Header bar */}
-                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                        <span style={{ background: statusBg, color: statusColor, padding: '2px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>
-                          {statusLabel}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                            {new Date(notif.updatedAt || notif.createdAt).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {filteredNotifs.map(notif => {
+                    const isAccepted = notif.status === 'accepted';
+                    const isRejected = notif.status === 'rejected';
+                    const isPending = notif.status === 'pending';
+                    const isCompleted = notif.status === 'completed';
+
+                    // Styles depending on status
+                    let borderLeftColor = '#64748b';
+                    let statusBg = '#f1f5f9';
+                    let statusColor = '#475569';
+                    let statusLabel = t(lang, 'Notification', 'اطلاع');
+
+                    if (isAccepted) {
+                      borderLeftColor = '#10b981';
+                      statusBg = '#e0f2fe';
+                      statusColor = '#0369a1';
+                      statusLabel = t(lang, 'Fulfillment Accepted', 'قبول کر لیا گیا');
+                    } else if (isRejected) {
+                      borderLeftColor = '#ef4444';
+                      statusBg = '#fee2e2';
+                      statusColor = '#991b1b';
+                      statusLabel = t(lang, 'Fulfillment Declined', 'مسترد کر دیا گیا');
+                    } else if (isPending) {
+                      borderLeftColor = '#f59e0b';
+                      statusBg = '#fef9c3';
+                      statusColor = '#713f12';
+                      statusLabel = t(lang, 'Pending Review', 'زیر التوا');
+                    } else if (isCompleted) {
+                      borderLeftColor = '#3b82f6';
+                      statusBg = '#dcfce3';
+                      statusColor = '#166534';
+                      statusLabel = t(lang, 'Fulfillment Completed', 'تکمیل شدہ');
+                    }
+
+                    return (
+                      <div
+                        key={notif._id}
+                        style={{
+                          background: 'rgba(255,255,255,0.02)',
+                          borderRadius: '16px',
+                          border: '1px solid rgba(255,255,255,0.07)',
+                          borderLeft: `5px solid ${borderLeftColor}`,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                          overflow: 'hidden',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        {/* Header bar */}
+                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                          <span style={{ background: statusBg, color: statusColor, padding: '2px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>
+                            {statusLabel}
                           </span>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (window.confirm("Are you sure you want to delete this notification?")) {
-                                try {
-                                  await axios.delete(`${API}/api/notifications/${notif._id}`, {
-                                    headers: { 'x-auth-token': localStorage.getItem('token') }
-                                  });
-                                  fetchData(); // refresh notifications
-                                } catch (err) {
-                                  console.error("Failed to delete notification:", err);
-                                  alert("Failed to delete notification.");
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                              {new Date(notif.updatedAt || notif.createdAt).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (window.confirm("Are you sure you want to delete this notification?")) {
+                                  try {
+                                    await axios.delete(`${API}/api/notifications/${notif._id}`, {
+                                      headers: { 'x-auth-token': localStorage.getItem('token') }
+                                    });
+                                    fetchData(); // refresh notifications
+                                  } catch (err) {
+                                    console.error("Failed to delete notification:", err);
+                                    alert("Failed to delete notification.");
+                                  }
                                 }
-                              }
-                            }}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            title="Delete Notification"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'background 0.2s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              title="Delete Notification"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Content */}
-                      <div style={{ padding: '1.25rem 1.5rem' }}>
-                        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                          <div style={{ flex: 1, minWidth: '250px' }}>
-                            <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
-                              {notif.donationId?.title || t(lang, 'Donation Item', 'عطیہ کی چیز')}
-                            </h4>
-                            <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                              {isAccepted && (
-                                <>
-                                  🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> ({t(lang, notif.donationId?.category || '', notif.donationId?.category || '')}) {t(lang, 'has been accepted by', 'قبول کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Please coordinate with them for pickup using the contact details below.', 'برائے مہربانی نیچے دیئے گئے رابطے کی تفصیلات کا استعمال کرتے ہوئے پک اپ کے لیے ان سے رابطہ کریں۔')}
-                                </>
-                              )}
-                              {isRejected && (
-                                <>
-                                  ❌ {t(lang, 'Your matching request for', 'آپ کی عطیہ کی درخواست برائے')} <strong>{notif.donationId?.title}</strong> {t(lang, 'was declined by', 'مسترد کر دی گئی تھی بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'The donation has been returned to the pool and is now available for other organizations to match.', 'عطیہ کو دوبارہ پول میں واپس کر دیا گیا ہے اور اب یہ دیگر تنظیموں کے لیے دستیاب ہے۔')}
-                                </>
-                              )}
-                              {isPending && (
-                                <>
-                                  ⏳ {t(lang, 'Your matched donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'is currently pending review by', 'زیر جائزہ ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>.
-                                </>
-                              )}
-                              {isCompleted && (
-                                <>
-                                  🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'has been successfully completed by', 'کامیابی کے ساتھ مکمل کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Thank you for your generous contribution!', 'آپ کے سخاوت مندانہ تعاون کا شکریہ!')}
-                                </>
-                              )}
-                              {!isAccepted && !isRejected && !isPending && !isCompleted && notif.message}
-                            </p>
+                        {/* Content */}
+                        <div style={{ padding: '1.25rem 1.5rem' }}>
+                          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch', flexWrap: 'wrap' }}>
+                            {/* Left Column: Donation Details */}
+                            <div style={{ flex: 1.2, minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
+                                {notif.donationId?.title || t(lang, 'Donation Item', 'عطیہ کی چیز')}
+                              </h4>
+                              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                                {isAccepted && (
+                                  <>
+                                    🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> ({t(lang, notif.donationId?.category || '', notif.donationId?.category || '')}) {t(lang, 'has been accepted by', 'قبول کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Please coordinate with them for pickup using the contact details below.', 'برائے مہربانی نیچے دیئے گئے رابطے کی تفصیلات کا استعمال کرتے ہوئے پک اپ کے لیے ان سے رابطہ کریں۔')}
+                                  </>
+                                )}
+                                {isRejected && (
+                                  <>
+                                    ❌ {t(lang, 'Your matching request for', 'آپ کی عطیہ کی درخواست برائے')} <strong>{notif.donationId?.title}</strong> {t(lang, 'was declined by', 'مسترد کر دی گئی تھی بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'The donation has been returned to the pool and is now available for other organizations to match.', 'عطیہ کو دوبارہ پول میں واپس کر دیا گیا ہے اور اب یہ دیگر تنظیموں کے لیے دستیاب ہے۔')}
+                                  </>
+                                )}
+                                {isPending && (
+                                  <>
+                                    ⏳ {t(lang, 'Your matched donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'is currently pending review by', 'زیر جائزہ ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>.
+                                  </>
+                                )}
+                                {isCompleted && (
+                                  <>
+                                    🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'has been successfully completed by', 'کامیابی کے ساتھ مکمل کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Thank you for your generous contribution!', 'آپ کے سخاوت مندانہ تعاون کا شکریہ!')}
+                                  </>
+                                )}
+                                {!isAccepted && !isRejected && !isPending && !isCompleted && notif.message}
+                              </p>
+                            </div>
 
-                            {/* Receiver details panel for Accepted/Completed/Pending */}
+                            {/* Right Column: Receiver Profile Card */}
                             {notif.receiverId && (isAccepted || isCompleted || isPending) && (
                               <div
                                 style={{
+                                  flex: 1,
+                                  minWidth: '280px',
                                   background: 'rgba(16, 185, 129, 0.04)',
                                   border: '1px solid rgba(16, 185, 129, 0.15)',
                                   borderRadius: '12px',
                                   padding: '1.25rem',
-                                  marginTop: '1rem',
                                   boxShadow: '0 2px 8px rgba(0,0,0,0.01)'
                                 }}
                               >
@@ -1800,7 +1915,7 @@ const ContributorPortal = () => {
                                   </div>
                                 </div>
 
-                                {/* Contact grids */}
+                                {/* Contact Details Grid */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '0.85rem' }}>
                                   <div>
                                     <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
@@ -1824,53 +1939,239 @@ const ContributorPortal = () => {
                                       <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
                                         {t(lang, 'Street Address', 'گلی کا پتہ')}
                                       </span>
-                                      <div style={{ color: '#f1f5f9', fontWeight: 600, lineHeight: 1.4 }}>
+                                      <div style={{ color: '#f1f5f9', fontWeight: 600, marginBottom: '10px' }}>
                                         {notif.receiverId.location.address}
                                       </div>
+                                      {notif.receiverId.location.coordinates && (
+                                        <a
+                                          href={`https://www.google.com/maps/search/?api=1&query=${notif.receiverId.location.coordinates[1]},${notif.receiverId.location.coordinates[0]}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{
+                                            background: '#10b981',
+                                            color: 'white',
+                                            textDecoration: 'none',
+                                            padding: '6px 12px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 700,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 2px 4px rgba(16,185,129,0.2)'
+                                          }}
+                                        >
+                                          <MapPin size={12} /> {t(lang, 'Open in Google Maps', 'گوگل میپس میں کھولیں')}
+                                        </a>
+                                      )}
                                     </div>
                                   )}
-
-                                  {notif.receiverId.location?.lat && notif.receiverId.location?.lng && (
-                                    <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(16, 185, 129, 0.1)', paddingTop: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                                      <div>
-                                        <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
-                                          {t(lang, 'Coordinates', 'کوآرڈینیٹس')}
-                                        </span>
-                                        <div style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>
-                                          {notif.receiverId.location.lat.toFixed(6)}, {notif.receiverId.location.lng.toFixed(6)}
-                                        </div>
-                                      </div>
-                                      <a
-                                        href={`https://www.google.com/maps/search/?api=1&query=${notif.receiverId.location.lat},${notif.receiverId.location.lng}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{
-                                          background: '#10b981',
-                                          color: 'white',
-                                          textDecoration: 'none',
-                                          padding: '6px 12px',
-                                          borderRadius: '6px',
-                                          fontSize: '0.78rem',
-                                          fontWeight: 700,
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '4px',
-                                          boxShadow: '0 2px 4px rgba(16,185,129,0.2)'
-                                        }}
-                                      >
-                                        <MapPin size={12} /> {t(lang, 'Open in Google Maps', 'گوگل میپس میں کھولیں')}
-                                      </a>
-                                    </div>
-                                  )}
-                                </div>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            );
+          })()}
+          </div>
+        )}
+
+        {/* ======================= AI FORECAST TAB ======================= */}
+        {activeTab === 'ai_forecast' && (
+          <div className="animate-fade-in" style={{ padding: '0.5rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '1rem' }} className="rp-notif-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <TrendingUp size={24} color="#10b981" /> {t(lang, 'AI Demand & Need Forecasting', 'اے آئی مانگ اور ضرورت کی پیشن گوئی')}
+                </h2>
+                <span style={{ background: '#f0fdf4', color: '#065f46', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
+                  Live Insights
+                </span>
+              </div>
+              <button
+                className="btn btn-outline"
+                onClick={fetchForecastData}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600 }}
+              >
+                <RefreshCw size={16} /> {t(lang, 'Refresh Forecast', 'پیشن گوئی تازہ کریں')}
+              </button>
+            </div>
+            <p style={{ color: '#64748b', marginBottom: '2rem' }}>
+              {t(lang, 'SpareShare AI analyzes historical donation postings, live receiver requests, and seasonal weather patterns to predict community requirements in advance.', 'سپیئر شیئر اے آئی تاریخی عطیات کی پوسٹنگ، براہ راست وصول کنندگان کی درخواستوں، اور موسمی حالات کا تجزیہ کر کے پیشگی کمیونٹی کی ضروریات کی پیشن گوئی کرتا ہے۔')}
+            </p>
+
+            {loadingForecast ? (
+              <div style={{ textAlign: 'center', padding: '6rem 2rem' }}>
+                <div style={{ width: 44, height: 44, border: '3px solid rgba(255,255,255,0.06)', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1.5rem' }} />
+                <p style={{ color: '#94a3b8', fontWeight: 600 }}>Analyzing database trends & running predictive modeling...</p>
+              </div>
+            ) : forecastError ? (
+              <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '16px', padding: '2rem', textAlign: 'center', color: '#f87171' }}>
+                <p style={{ fontSize: '1rem', fontWeight: 600 }}>⚠️ {forecastError}</p>
+                <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={fetchForecastData}>Retry Fetch</button>
+              </div>
+            ) : forecastData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                
+                {/* AI Coordinator Summary Card */}
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.4) 0%, rgba(4, 120, 87, 0.1) 100%)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: '24px',
+                  padding: '2rem',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.3)'
+                }}>
+                  <div style={{ position: 'absolute', top: 0, right: 0, padding: '12px 20px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.75rem', fontWeight: 800, borderBottomLeftRadius: 16 }}>
+                    🧠 SPARESHARE AI COORDINATOR
+                  </div>
+                  <h3 style={{ margin: '0 0 12px', fontSize: '1.25rem', color: '#34d399', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={20} /> AI Analytical Outlook
+                  </h3>
+                  <p style={{ color: '#e2e8f0', fontSize: '1.05rem', lineHeight: 1.7, margin: 0 }}>
+                    {forecastData.aiSummary}
+                  </p>
+                  <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', fontSize: '0.8rem' }}>
+                    <Clock size={14} /> Last updated: {new Date(forecastData.lastUpdated).toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Category Forecasts and Hotspots Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
+                  
+                  {/* Category Demand Scores */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '24px', padding: '1.5rem 2rem' }}>
+                    <h3 style={{ color: 'white', fontSize: '1.15rem', fontWeight: 800, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
+                      Category Demand Probability
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {forecastData.forecasts.map(f => {
+                        const isHigh = f.demandScore >= 70;
+                        const isMod = f.demandScore >= 40;
+                        const barColor = isHigh ? 'linear-gradient(90deg, #ef4444, #f59e0b)' : isMod ? 'linear-gradient(90deg, #f59e0b, #eab308)' : 'linear-gradient(90deg, #10b981, #34d399)';
+                        const iconMap = { Food: '🍔', Medicine: '💊', Clothes: '👕', Grocery: '🛒', Household: '🏠' };
+                        
+                        return (
+                          <div key={f.category}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f1f5f9' }}>
+                                {iconMap[f.category] || '📦'} {f.category}
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '0.78rem', background: f.trend === 'Increasing' ? 'rgba(239,68,68,0.1)' : f.trend === 'Decreasing' ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)', color: f.trend === 'Increasing' ? '#ef4444' : f.trend === 'Decreasing' ? '#10b981' : '#94a3b8', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                                  {f.trend === 'Increasing' ? '📈 Rising' : f.trend === 'Decreasing' ? '📉 Falling' : '➡️ Stable'}
+                                </span>
+                                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f1f5f9' }}>{f.demandScore}%</span>
+                              </div>
+                            </div>
+                            <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '99px', overflow: 'hidden' }}>
+                              <div style={{ width: `${f.demandScore}%`, height: '100%', background: barColor, borderRadius: '99px' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginTop: '6px' }}>
+                              <span>Requests: {f.activeRequests}</span>
+                              <span>Available Supply: {f.activeDonations}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Hotspots Section */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '24px', padding: '1.5rem 2rem' }}>
+                    <h3 style={{ color: 'white', fontSize: '1.15rem', fontWeight: 800, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
+                      Regional Demand Hotspots
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {forecastData.hotspots.map((h, i) => {
+                        const isCritical = h.urgency === 'Critical';
+                        const badgeColor = isCritical ? '#fee2e2' : h.urgency === 'High' ? '#fef3c7' : '#e0f2fe';
+                        const badgeTextColor = isCritical ? '#991b1b' : h.urgency === 'High' ? '#92400e' : '#0369a1';
+                        
+                        return (
+                          <div 
+                            key={i} 
+                            style={{ 
+                              background: 'rgba(255,255,255,0.01)', 
+                              border: '1px solid rgba(255,255,255,0.04)', 
+                              borderRadius: '16px', 
+                              padding: '1rem', 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center' 
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderRadius: '12px', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <MapPin size={18} />
+                              </div>
+                              <div>
+                                <h4 style={{ margin: 0, color: 'white', fontWeight: 700, fontSize: '0.95rem' }}>{h.area}</h4>
+                                <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '0.78rem' }}>
+                                  Primary Need: <strong style={{ color: '#cbd5e1' }}>{h.primaryDemand}</strong>
+                                </p>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ background: badgeColor, color: badgeTextColor, padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-block' }}>
+                                {h.urgency}
+                              </span>
+                              <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>
+                                {h.totalRequests} active request{h.totalRequests !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Direct Action Suggestion Panel */}
+                <div style={{
+                  background: 'rgba(16, 185, 129, 0.05)',
+                  border: '1px dashed rgba(16, 185, 129, 0.3)',
+                  borderRadius: '20px',
+                  padding: '1.5rem 2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1.5rem',
+                  flexWrap: 'wrap',
+                  marginTop: '1rem'
+                }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', flexShrink: 0 }}>
+                    <Zap size={24} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ margin: '0 0 4px', color: 'white', fontWeight: 800, fontSize: '1.05rem' }}>Actionable Recommendation for You</h4>
+                    <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                      We recommend donating <strong style={{ color: '#10b981' }}>{forecastData.forecasts.sort((a,b) => b.demandScore - a.demandScore)[0]?.category}</strong> items located around <strong style={{ color: '#10b981' }}>{forecastData.hotspots[0]?.area || 'Lahore'}</strong> to address the most critical current shortage.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const mostDemandedCat = forecastData.forecasts.sort((a,b) => b.demandScore - a.demandScore)[0]?.category || 'Food';
+                      setCategory(mostDemandedCat);
+                      setActiveTab('home');
+                    }}
+                    className="btn btn-primary" 
+                    style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(16,185,129,0.2)' }}
+                  >
+                    Donate Now
+                  </button>
+                </div>
+
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16 }}>
+                <p style={{ color: '#94a3b8' }}>Failed to retrieve community forecasting reports.</p>
+                <button className="btn btn-outline" style={{ marginTop: '1rem' }} onClick={fetchForecastData}>Load Dashboard</button>
               </div>
             )}
           </div>
@@ -1881,7 +2182,7 @@ const ContributorPortal = () => {
       {/* Receiver Post Details Modal */}
       {selectedPost && (
         <div className="modal-overlay" onClick={() => setSelectedPost(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
-          <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, width: '95%', padding: '2rem', background: 'rgba(8, 15, 30, 0.98)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.65)', color: 'white', position: 'relative' }}>
+          <div className="modal-content post-modal pm-card-padded" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, width: '95%', background: 'rgba(8, 15, 30, 0.98)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.65)', color: 'white', position: 'relative' }}>
             <button className="close-modal" onClick={() => setSelectedPost(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}><X size={16} /></button>
             
             <div className="post-modal-header" style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
@@ -1901,10 +2202,10 @@ const ContributorPortal = () => {
             <div className="post-modal-body">
               <div className="pm-demand-box" style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', borderRadius: '16px', marginBottom: '15px' }}>
                 <h3 style={{ margin: '0 0 10px', fontSize: '0.92rem', color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 800 }}>Receiver Details</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: '0.9rem', color: '#9ca3af' }}>
+                <div className="pm-details-grid">
                   <div><strong style={{ color: 'white' }}>Name:</strong> {selectedPost.receiverId?.name || 'NGO'}</div>
                   <div><strong style={{ color: 'white' }}>City:</strong> {selectedPost.receiverId?.city || 'Pakistan'}</div>
-                  <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'white' }}>Email:</strong> {selectedPost.receiverId?.email || 'N/A'}</div>
+                  <div className="pm-details-email"><strong style={{ color: 'white' }}>Email:</strong> {selectedPost.receiverId?.email || 'N/A'}</div>
                 </div>
               </div>
 
@@ -1922,9 +2223,9 @@ const ContributorPortal = () => {
                 <p className="pm-proof-desc" style={{ fontSize: '0.92rem', color: '#9ca3af', margin: 0, lineHeight: 1.6 }}>{selectedPost.desc || 'No description provided.'}</p>
               </div>
 
-              <div className="pm-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button className="btn btn-outline" onClick={() => setSelectedPost(null)} style={{ borderRadius: '99px', padding: '0.65rem 1.25rem' }}>{t(lang, 'Cancel', 'منسوخ کریں')}</button>
-                <button className="btn btn-primary" onClick={() => handleSendNotification(selectedPost)} style={{ borderRadius: '99px', padding: '0.65rem 1.5rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="pm-actions-row">
+                <button className="btn btn-outline" onClick={() => setSelectedPost(null)}>{t(lang, 'Cancel', 'منسوخ کریں')}</button>
+                <button className="btn btn-primary" onClick={() => handleSendNotification(selectedPost)}>
                   <Send size={16} /> {t(lang, 'Dispatch My Donation Here', 'میرا عطیہ یہاں بھیجیں')}
                 </button>
               </div>

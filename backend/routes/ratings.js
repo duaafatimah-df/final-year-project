@@ -56,20 +56,18 @@ router.post('/', authMiddleware, async (req, res) => {
       }
       await targetUser.save();
 
-      // Trigger NLP and multi-factor fraud detection
+      // Trigger NLP and multi-factor fraud detection asynchronously in the background so it doesn't block the response
       const { analyzeFraudRisk } = require('../utils/fraudAi');
       const reviewComment = comment || feedback || '';
-      try {
-        await analyzeFraudRisk(
-          targetUser._id,
-          req.user.userId,
-          donation._id,
-          reviewComment,
-          rating
-        );
-      } catch (fraudErr) {
-        console.error('⚠️ Fraud analysis error (ignored for normal rating submission):', fraudErr.message);
-      }
+      analyzeFraudRisk(
+        targetUser._id,
+        req.user.userId,
+        donation._id,
+        reviewComment,
+        rating
+      ).catch(fraudErr => {
+        console.error('⚠️ Background Fraud analysis error:', fraudErr.message);
+      });
     }
 
     res.json({ 

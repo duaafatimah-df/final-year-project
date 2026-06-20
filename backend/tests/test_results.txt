@@ -1,0 +1,82 @@
+﻿
+> backend@1.0.0 test
+> jest --runInBand --detectOpenHandles --forceExit
+
+  console.log
+    Γùç injected env (13) from .env // tip: Γùê encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+  console.log
+    ≡ƒôº Email Webhook URL is: NOT CONFIGURED
+
+      at Object.log (utils/emailService.js:6:9)
+
+  console.log
+    ΓÅ░ Auto-expiry cron job started (runs every 15 minutes)
+
+      at Object.log (server.js:73:9)
+
+  console.log
+    ≡ƒÜÇ SpareShare AI Backend running on port 5000
+
+      at Server.log (server.js:78:13)
+
+node.exe : PASS tests/api.test.js (9.638 s)
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS tests/api.test.js (9.638 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  SpareShare AI API Health & Verification Tests
+    ΓêÜ should respond with 200 OK on health check endpoint (94 ms)
+    ΓêÜ should return 400/401 Bad Request on invalid login credentials (881 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        9.842 s
+Ran all test suites.
+
+Jest has detected the following 2 open handles potentially keeping Jest from exiting:
+
+  ΓùÅ  Timeout
+
+    [0m [90m 52 |[39m
+     [90m 53 |[39m [90m// ΓöÇΓöÇΓöÇ Auto-Expiry Cron Job (every 15 minutes) 
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ[39m
+    [31m[1m>[22m[39m[90m 54 |[39m cron[33m.[39mschedule([32m'*/15 * * * *'[39m[33m,[39m [36masync[39m () 
+[33m=>[39m {
+     [90m    |[39m      [31m[1m^[22m[39m
+     [90m 55 |[39m   [36mtry[39m {
+     [90m 56 |[39m     [36mconst[39m [33mDonation[39m [33m=[39m 
+require([32m'./models/Donation'[39m)[33m;[39m
+     [90m 57 |[39m     [36mconst[39m result [33m=[39m [36mawait[39m 
+[33mDonation[39m[33m.[39mupdateMany([0m
+
+      at Runner.start (node_modules/node-cron/src/scheduler/runner.ts:167:29)
+      at InlineScheduledTask.start (node_modules/node-cron/src/tasks/inline-scheduled-task.ts:89:19)
+      at Object.schedule (node_modules/node-cron/src/node-cron.ts:46:10)
+      at Object.schedule (server.js:54:6)
+      at Object.require (tests/api.test.js:3:13)
+
+
+  ΓùÅ  TCPSERVERWRAP
+
+    [0m [90m 75 |[39m [90m// ΓöÇΓöÇΓöÇ Server ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö
+Ç[39m
+     [90m 76 |[39m [36mif[39m (process[33m.[39menv[33m.[39m[33mNODE_ENV[39m [33m!==[39m 
+[32m'production'[39m) {
+    [31m[1m>[22m[39m[90m 77 |[39m   app[33m.[39mlisten([33mPORT[39m[33m,[39m () [33m=>[39m {
+     [90m    |[39m       [31m[1m^[22m[39m
+     [90m 78 |[39m     console[33m.[39mlog([32m`≡ƒÜÇ SpareShare AI Backend running on port 
+${PORT}`[39m)[33m;[39m
+     [90m 79 |[39m   })[33m;[39m
+     [90m 80 |[39m }[0m
+
+      at app.listen (node_modules/express/lib/application.js:605:24)
+      at Object.listen (server.js:77:7)
+      at Object.require (tests/api.test.js:3:13)
+

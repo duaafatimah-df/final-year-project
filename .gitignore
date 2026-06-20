@@ -1,3 +1,16 @@
 .env
 backend/.env
 frontend/.env
+
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+ai-service/node_modules/
+ml_service/node_modules/
+
+dist/
+build/
+.cache/
+temp_emails/
+.DS_Store
+*.log

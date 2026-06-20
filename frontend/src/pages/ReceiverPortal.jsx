@@ -106,6 +106,9 @@ const ReceiverPortal = () => {
   const [previewImage, setPreviewImage] = useState(null);
 
   const [newPostTitle, setNewPostTitle] = useState('');
+  const [newPostCategory, setNewPostCategory] = useState('Food');
+  const [newPostUrgency, setNewPostUrgency] = useState('Low');
+  const [newPostDesc, setNewPostDesc] = useState('');
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
