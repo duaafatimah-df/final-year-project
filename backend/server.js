@@ -22,6 +22,22 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB Atlas (SpareShare AI)'))
   .catch(err => console.error('❌ MongoDB connection error:', err.message));
 
+// Middleware to ensure database is connected before processing requests (Serverless optimization)
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+  try {
+    console.log(`🔌 MongoDB connection state is ${mongoose.connection.readyState}. Awaiting connection...`);
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('✅ MongoDB connected successfully.');
+    next();
+  } catch (err) {
+    console.error('❌ MongoDB connection middleware error:', err.message);
+    res.status(500).json({ error: 'Database connection failed', details: err.message });
+  }
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
