@@ -201,7 +201,7 @@ RULES:
     } catch (err) {
       console.error('❌ Gemini analyzeItem FAILED, switching to MobileNetV2 Fallback:', err.message);
       try {
-        const response = await axios.post(`${AI_URL}/analyze-food`, { imageBase64 });
+        const response = await axios.post(`${AI_URL}/analyze-food`, { imageBase64 }, { timeout: 2000 });
         const fallbackData = response.data;
         return {
           status: fallbackData.status,
@@ -226,7 +226,7 @@ RULES:
   // 2. OCR Medicine Expiry
   extractExpiry: async (imageBase64) => {
     try {
-      const res = await axios.post(`${AI_URL}/extract-expiry`, { imageBase64 });
+      const res = await axios.post(`${AI_URL}/extract-expiry`, { imageBase64 }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (extractExpiry):', err.message);
@@ -237,7 +237,7 @@ RULES:
   // 3. Smart Matching
   match: async (donorLat, donorLng, receivers) => {
     try {
-      const res = await axios.post(`${AI_URL}/match`, { donorLat, donorLng, receivers });
+      const res = await axios.post(`${AI_URL}/match`, { donorLat, donorLng, receivers }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (match):', err.message);
@@ -248,7 +248,7 @@ RULES:
   // 4. Fraud Score
   getFraudScore: async (userId, reports, avgRating, dailyPosts) => {
     try {
-      const res = await axios.get(`${AI_URL}/fraud-score`, { params: { reports, avgRating, dailyPosts } });
+      const res = await axios.get(`${AI_URL}/fraud-score`, { params: { reports, avgRating, dailyPosts } }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (getFraudScore):', err.message);
@@ -264,7 +264,7 @@ RULES:
       return { translatedText: translationCache[cacheKey] };
     }
     try {
-      const res = await axios.post(`${AI_URL}/translate`, { text, targetLang });
+      const res = await axios.post(`${AI_URL}/translate`, { text, targetLang }, { timeout: 2000 });
       if (res.data && res.data.translatedText) {
         translationCache[cacheKey] = res.data.translatedText;
       }
@@ -278,9 +278,9 @@ RULES:
   // 6. Smart Suggestion
   suggestDonation: async (userId, lat, lng, category, dbDemand = 0) => {
     try {
-      const weatherRes = await axios.get(`${AI_URL}/weather-insights`, { params: { lat, lng } });
+      const weatherRes = await axios.get(`${AI_URL}/weather-insights`, { params: { lat, lng } }, { timeout: 2000 });
       const temp = weatherRes.data.temperature;
-      const res = await axios.get(`${AI_URL}/suggest-donation`, { params: { category, temp, dbDemand } });
+      const res = await axios.get(`${AI_URL}/suggest-donation`, { params: { category, temp, dbDemand } }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (suggestDonation):', err.message);
@@ -291,7 +291,7 @@ RULES:
   // 7. Forecast
   forecast: async () => {
     try {
-      const res = await axios.get(`${AI_URL}/forecast`);
+      const res = await axios.get(`${AI_URL}/forecast`, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (forecast):', err.message);
@@ -302,7 +302,7 @@ RULES:
   // 8. Food Expiry Prediction (Time/Temp check)
   predictExpiry: async (category, condition, foodPreparedTime, temp = 25.0) => {
     try {
-      const res = await axios.post(`${AI_URL}/predict-expiry`, { category, condition, foodPreparedTime, temp });
+      const res = await axios.post(`${AI_URL}/predict-expiry`, { category, condition, foodPreparedTime, temp }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (predictExpiry):', err.message);
@@ -313,7 +313,7 @@ RULES:
   // 9. Weather Insights
   weatherInsights: async (lat, lng) => {
     try {
-      const res = await axios.get(`${AI_URL}/weather-insights`, { params: { lat, lng } });
+      const res = await axios.get(`${AI_URL}/weather-insights`, { params: { lat, lng } }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (weatherInsights):', err.message);
@@ -324,7 +324,7 @@ RULES:
   // 10. Trust Score
   getTrustScore: async (rating, completed, reports) => {
     try {
-      const res = await axios.get(`${AI_URL}/trust-score`, { params: { rating, completed, reports } });
+      const res = await axios.get(`${AI_URL}/trust-score`, { params: { rating, completed, reports } }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (trustScore):', err.message);
@@ -335,7 +335,7 @@ RULES:
   // 11. Weather Radius
   getWeatherRadius: async (category, temp) => {
     try {
-      const res = await axios.get(`${AI_URL}/weather-radius`, { params: { category, temp } });
+      const res = await axios.get(`${AI_URL}/weather-radius`, { params: { category, temp } }, { timeout: 2000 });
       return res.data;
     } catch (err) {
       console.error('Python API Error (weatherRadius):', err.message);
