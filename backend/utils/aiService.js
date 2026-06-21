@@ -6,6 +6,42 @@ const translationCache = {};
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
+// Circuit Breaker state for Python AI service
+let isPythonOffline = false;
+let lastPythonCheck = 0;
+const PYTHON_CHECK_INTERVAL = 30000; // 30 seconds check interval
+
+const callPythonService = async (method, path, data = null, isGet = false) => {
+  const now = Date.now();
+  if (isPythonOffline) {
+    if (now - lastPythonCheck > PYTHON_CHECK_INTERVAL) {
+      console.log("🔄 Retrying Python AI service connection...");
+      isPythonOffline = false;
+    } else {
+      throw new Error("Python AI service is marked offline (circuit breaker active)");
+    }
+  }
+
+  try {
+    const config = { timeout: 2000 };
+    let res;
+    if (isGet) {
+      res = await axios.get(`${AI_URL}${path}`, { ...config, params: data });
+    } else {
+      res = await axios.post(`${AI_URL}${path}`, data, config);
+    }
+    return res.data;
+  } catch (err) {
+    // If it's a network error, connection timeout, or refused connection, trip the circuit breaker
+    if (!err.response || err.code === 'ECONNABORTED' || err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') {
+      isPythonOffline = true;
+      lastPythonCheck = now;
+      console.warn(`🛑 Python AI service connection failed. Tripping circuit breaker. Error: ${err.message}`);
+    }
+    throw err;
+  }
+};
+
 function cleanToStandardCategory(cat) {
   if (!cat) return 'Grocery';
   const lower = cat.toLowerCase();
@@ -201,8 +237,8 @@ RULES:
     } catch (err) {
       console.error('❌ Gemini analyzeItem FAILED, switching to MobileNetV2 Fallback:', err.message);
       try {
-        const response = await axios.post(`${AI_URL}/analyze-food`, { imageBase64 }, { timeout: 2000 });
-        const fallbackData = response.data;
+        const response = await callPythonService('POST', '/analyze-food', { imageBase64 });
+        const fallbackData = response;
         return {
           status: fallbackData.status,
           safetyScore: fallbackData.safetyScore,
@@ -226,8 +262,8 @@ RULES:
   // 2. OCR Medicine Expiry
   extractExpiry: async (imageBase64) => {
     try {
-      const res = await axios.post(`${AI_URL}/extract-expiry`, { imageBase64 }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('POST', '/extract-expiry', { imageBase64 });
+      return res;
     } catch (err) {
       console.error('Python API Error (extractExpiry):', err.message);
       throw new Error(err.response?.data?.detail || 'Python AI Service failed OCR extraction.');
@@ -237,8 +273,8 @@ RULES:
   // 3. Smart Matching
   match: async (donorLat, donorLng, receivers) => {
     try {
-      const res = await axios.post(`${AI_URL}/match`, { donorLat, donorLng, receivers }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('POST', '/match', { donorLat, donorLng, receivers });
+      return res;
     } catch (err) {
       console.error('Python API Error (match):', err.message);
       throw new Error(err.response?.data?.detail || 'Python AI Service matching failed.');
@@ -248,8 +284,8 @@ RULES:
   // 4. Fraud Score
   getFraudScore: async (userId, reports, avgRating, dailyPosts) => {
     try {
-      const res = await axios.get(`${AI_URL}/fraud-score`, { params: { reports, avgRating, dailyPosts } }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('GET', '/fraud-score', { reports, avgRating, dailyPosts }, true);
+      return res;
     } catch (err) {
       console.error('Python API Error (getFraudScore):', err.message);
       throw new Error(err.response?.data?.detail || 'Python AI Service fraud detection failed.');
@@ -257,31 +293,59 @@ RULES:
   },
 
   // 5. Deep Translation
-  translate: async (text, targetLang = 'ur') => {
+  translate: async (text, targetLang = 'ur', forceGemini = false) => {
     if (!text) return { translatedText: "" };
     const cacheKey = `${targetLang}:${text}`;
     if (translationCache[cacheKey]) {
       return { translatedText: translationCache[cacheKey] };
     }
-    try {
-      const res = await axios.post(`${AI_URL}/translate`, { text, targetLang }, { timeout: 2000 });
-      if (res.data && res.data.translatedText) {
-        translationCache[cacheKey] = res.data.translatedText;
-      }
-      return res.data;
-    } catch (err) {
-      console.error('Python API Error (translate):', err.message);
-      throw new Error(err.response?.data?.detail || 'Python AI Service translation failed.');
+    if (targetLang === 'en') {
+      return { translatedText: text };
     }
+
+    try {
+      const data = await callPythonService('POST', '/translate', { text, targetLang });
+      if (data && data.translatedText) {
+        translationCache[cacheKey] = data.translatedText;
+        return data;
+      }
+    } catch (err) {
+      console.warn(`⚠️ Translation via Python failed: ${err.message}`);
+      
+      // If Python is offline, only use Gemini if forceGemini is true (single item translation)
+      // to avoid slowing down list fetches on dashboards
+      if (forceGemini) {
+        console.log(`🔄 Falling back to Gemini for single item translation...`);
+        try {
+          if (process.env.GEMINI_API_KEY) {
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            const prompt = `Translate this text to Urdu. Output only the translation, no explanation, no formatting: "${text}"`;
+            const result = await model.generateContent(prompt);
+            const translatedText = result.response.text().trim();
+            if (translatedText) {
+              translationCache[cacheKey] = translatedText;
+              return { translatedText };
+            }
+          }
+        } catch (geminiErr) {
+          console.error('❌ Gemini translation failed:', geminiErr.message);
+        }
+      } else {
+        console.log(`⏩ Python is offline. Skipping Gemini fallback for list item to preserve load speed.`);
+      }
+    }
+
+    // Ultimate fallback: return original text
+    return { translatedText: text };
   },
 
   // 6. Smart Suggestion
   suggestDonation: async (userId, lat, lng, category, dbDemand = 0) => {
     try {
-      const weatherRes = await axios.get(`${AI_URL}/weather-insights`, { params: { lat, lng } }, { timeout: 2000 });
-      const temp = weatherRes.data.temperature;
-      const res = await axios.get(`${AI_URL}/suggest-donation`, { params: { category, temp, dbDemand } }, { timeout: 2000 });
-      return res.data;
+      const weatherData = await callPythonService('GET', '/weather-insights', { lat, lng }, true);
+      const temp = weatherData.temperature;
+      const res = await callPythonService('GET', '/suggest-donation', { category, temp, dbDemand }, true);
+      return res;
     } catch (err) {
       console.error('Python API Error (suggestDonation):', err.message);
       throw new Error('Python AI Service suggestions failed.');
@@ -291,8 +355,8 @@ RULES:
   // 7. Forecast
   forecast: async () => {
     try {
-      const res = await axios.get(`${AI_URL}/forecast`, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('GET', '/forecast', null, true);
+      return res;
     } catch (err) {
       console.error('Python API Error (forecast):', err.message);
       throw new Error('Python AI Service forecast failed.');
@@ -302,8 +366,8 @@ RULES:
   // 8. Food Expiry Prediction (Time/Temp check)
   predictExpiry: async (category, condition, foodPreparedTime, temp = 25.0) => {
     try {
-      const res = await axios.post(`${AI_URL}/predict-expiry`, { category, condition, foodPreparedTime, temp }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('POST', '/predict-expiry', { category, condition, foodPreparedTime, temp });
+      return res;
     } catch (err) {
       console.error('Python API Error (predictExpiry):', err.message);
       throw new Error(err.response?.data?.detail || 'Python AI Service predict expiry failed.');
@@ -313,8 +377,8 @@ RULES:
   // 9. Weather Insights
   weatherInsights: async (lat, lng) => {
     try {
-      const res = await axios.get(`${AI_URL}/weather-insights`, { params: { lat, lng } }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('GET', '/weather-insights', { lat, lng }, true);
+      return res;
     } catch (err) {
       console.error('Python API Error (weatherInsights):', err.message);
       throw new Error('Python AI Service weather fetch failed.');
@@ -324,8 +388,8 @@ RULES:
   // 10. Trust Score
   getTrustScore: async (rating, completed, reports) => {
     try {
-      const res = await axios.get(`${AI_URL}/trust-score`, { params: { rating, completed, reports } }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('GET', '/trust-score', { rating, completed, reports }, true);
+      return res;
     } catch (err) {
       console.error('Python API Error (trustScore):', err.message);
       throw new Error('Python AI Service trust score failed.');
@@ -335,8 +399,8 @@ RULES:
   // 11. Weather Radius
   getWeatherRadius: async (category, temp) => {
     try {
-      const res = await axios.get(`${AI_URL}/weather-radius`, { params: { category, temp } }, { timeout: 2000 });
-      return res.data;
+      const res = await callPythonService('GET', '/weather-radius', { category, temp }, true);
+      return res;
     } catch (err) {
       console.error('Python API Error (weatherRadius):', err.message);
       throw new Error('Python AI Service weather radius failed.');

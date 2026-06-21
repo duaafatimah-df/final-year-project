@@ -8,16 +8,16 @@ import './Home.css';
 
 const t = (lang, en, ur) => lang === 'Eng' ? en : ur;
 
-const imgFood = '/images/pakistan_ngo_food.png';
-const imgMedical = '/images/pakistan_ngo_medical.png';
-const imgEducation = '/images/pakistan_ngo_education.png';
-const imgRescue = '/images/pakistan_ngo_rescue.png';
-const imgClothing = '/images/pakistan_ngo_clothing.png';
-const imgRation = '/images/pakistan_ngo_ration.png';
-const imgWater = '/images/pakistan_ngo_water.png';
-const imgCommunity = '/images/pakistan_ngo_community.png';
-const imgShelter = '/images/pakistan_ngo_shelter.png';
-const imgYouth = '/images/pakistan_ngo_youth.png';
+const imgFood = '/images/pakistan_ngo_food.webp';
+const imgMedical = '/images/pakistan_ngo_medical.webp';
+const imgEducation = '/images/pakistan_ngo_education.webp';
+const imgRescue = '/images/pakistan_ngo_rescue.webp';
+const imgClothing = '/images/pakistan_ngo_clothing.webp';
+const imgRation = '/images/pakistan_ngo_ration.webp';
+const imgWater = '/images/pakistan_ngo_water.webp';
+const imgCommunity = '/images/pakistan_ngo_community.webp';
+const imgShelter = '/images/pakistan_ngo_shelter.webp';
+const imgYouth = '/images/pakistan_ngo_youth.webp';
 const logo1 = 'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=150';
 
 export const organizations = [

@@ -10,7 +10,7 @@ router.post('/translate', async (req, res) => {
     const { text, targetLang } = req.body;
     if (!text) return res.status(400).json({ error: 'Text is required' });
 
-    const result = await aiService.translate(text, targetLang || 'ur');
+    const result = await aiService.translate(text, targetLang || 'ur', true);
     res.json(result);
   } catch (err) {
     console.error('Translation Route Error:', err.message);
@@ -184,6 +184,69 @@ Do NOT use markdown styles (bold, lists). Return plain text only.
   } catch (err) {
     console.error('Demand Forecast Route Error:', err.message);
     res.status(500).json({ error: 'Failed to fetch demand forecast.' });
+  }
+});
+
+// ─── GET /api/ai/suggest-donation ─────────────────────────────────────────
+router.get('/suggest-donation', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId parameter is required' });
+    }
+
+    // Get user details
+    const User = require('../models/User');
+    const user = await User.findById(userId);
+    
+    // Default coordinates (Lahore)
+    let lat = 31.5204;
+    let lng = 74.3587;
+    if (user && user.location && user.location.lat !== undefined) {
+      lat = user.location.lat;
+      lng = user.location.lng;
+    }
+
+    // Query User's past donations to get their favorite/most donated category
+    const Donation = require('../models/Donation');
+    const pastDonations = await Donation.find({ donorId: userId });
+    
+    // Count categories
+    const catCounts = {};
+    pastDonations.forEach(d => {
+      catCounts[d.category] = (catCounts[d.category] || 0) + 1;
+    });
+
+    let topCategory = 'Food';
+    let maxCount = 0;
+    Object.keys(catCounts).forEach(cat => {
+      if (catCounts[cat] > maxCount) {
+        maxCount = catCounts[cat];
+        topCategory = cat;
+      }
+    });
+
+    // Query active demands in DB for this category
+    const Post = require('../models/Post');
+    const dbDemand = await Post.countDocuments({ category: topCategory, status: { $ne: 'Fulfilled' } });
+
+    // Fetch suggestion from AI Service
+    let suggestionResult;
+    try {
+      suggestionResult = await aiService.suggestDonation(userId, lat, lng, topCategory, dbDemand);
+    } catch (aiErr) {
+      console.warn("AI Service suggestDonation failed, returning fallback:", aiErr.message);
+      // Smart fallback when Python service is down
+      suggestionResult = {
+        primary: `Based on current local demands, donating ${topCategory} is highly recommended.`,
+        details: `There are currently ${dbDemand} open requests for ${topCategory} near you.`
+      };
+    }
+
+    res.json(suggestionResult);
+  } catch (err) {
+    console.error('Suggest Donation Route Error:', err.message);
+    res.json({ primary: 'Donate food today to help your community!' });
   }
 });
 
