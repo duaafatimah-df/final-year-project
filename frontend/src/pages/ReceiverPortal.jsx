@@ -57,6 +57,7 @@ const ReceiverPortal = () => {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('profile');
+  const [postFilter, setPostFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfile, setShowProfile] = useState(false);
 
@@ -206,7 +207,8 @@ const ReceiverPortal = () => {
 
     // 1. Fetch posts
     if (postsRes.status === 'fulfilled') {
-      setMyPosts(postsRes.value.data);
+      const data = Array.isArray(postsRes.value?.data) ? postsRes.value.data : [];
+      setMyPosts(data);
       successCount++;
     } else {
       console.error('Error fetching posts', postsRes.reason.message);
@@ -215,7 +217,8 @@ const ReceiverPortal = () => {
 
     // 2. Fetch incoming notifications
     if (notifRes.status === 'fulfilled') {
-      const mapped = notifRes.value.data.map(notif => {
+      const data = Array.isArray(notifRes.value?.data) ? notifRes.value.data : [];
+      const mapped = data.map(notif => {
         if (!notif.donationId) return null;
         return {
           ...notif.donationId,
@@ -236,7 +239,8 @@ const ReceiverPortal = () => {
 
     // 3. Fetch completed
     if (completedRes.status === 'fulfilled') {
-      setCompletedDonations(completedRes.value.data);
+      const data = Array.isArray(completedRes.value?.data) ? completedRes.value.data : [];
+      setCompletedDonations(data);
       successCount++;
     } else {
       console.error('Error fetching completed', completedRes.reason.message);
@@ -245,8 +249,9 @@ const ReceiverPortal = () => {
 
     // 4. Fetch AI matches
     if (aiMatchedRes.status === 'fulfilled') {
-      if (aiMatchedRes.value.data && aiMatchedRes.value.data.length > 0) {
-        setAiMatches(aiMatchedRes.value.data);
+      const data = Array.isArray(aiMatchedRes.value?.data) ? aiMatchedRes.value.data : [];
+      if (data && data.length > 0) {
+        setAiMatches(data);
       } else {
         setAiMatches(mockAiMatches);
       }
@@ -261,13 +266,13 @@ const ReceiverPortal = () => {
     let donors = [];
     let activeDonations = [];
     if (donorsRes.status === 'fulfilled') {
-      donors = donorsRes.value.data || [];
+      donors = Array.isArray(donorsRes.value?.data) ? donorsRes.value.data : [];
     } else {
       console.error("Failed to fetch real donors list:", donorsRes.reason?.message);
     }
 
     if (browseRes.status === 'fulfilled') {
-      activeDonations = browseRes.value.data || [];
+      activeDonations = Array.isArray(browseRes.value?.data) ? browseRes.value.data : [];
     } else {
       console.error("Failed to fetch browse donations:", browseRes.reason?.message);
     }
@@ -504,6 +509,21 @@ const ReceiverPortal = () => {
     } catch (err) { console.error(err); }
   };
 
+  const handleDeletePost = async (id, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this demand post?")) return;
+    try {
+      await axios.delete(`${API}/api/posts/${id}`, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
+      setMyPosts(prev => prev.filter(p => p._id !== id));
+      showToast("Demand post deleted successfully.", "success");
+    } catch (err) {
+      console.error("Failed to delete post:", err);
+      showToast("Failed to delete demand post.", "error");
+    }
+  };
+
   const filteredDonors = realDonors.filter(donor => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -554,6 +574,9 @@ const ReceiverPortal = () => {
   });
 
   const filteredMyPosts = myPosts.filter(post => {
+    if (postFilter !== 'All') {
+      if (post.status.toLowerCase() !== postFilter.toLowerCase()) return false;
+    }
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -1099,15 +1122,39 @@ const ReceiverPortal = () => {
 
         {activeTab === 'my_posts' && (
           <div className="receiver-posts-view animate-fade-in">
-            <div className="section-header-flex">
+            <div className="section-header-flex" style={{ marginBottom: '1rem' }}>
               <h2 className="section-title">My Demand Posts</h2>
               <button className="btn btn-primary" onClick={() => setShowCreatePost(true)}>+ Create New Demand</button>
+            </div>
+
+            {/* Post Filter Tabs */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              {['All', 'Active', 'Fulfilled'].map(filterOption => (
+                <button
+                  key={filterOption}
+                  onClick={() => setPostFilter(filterOption)}
+                  style={{
+                    background: postFilter === filterOption ? '#10b981' : 'rgba(255,255,255,0.06)',
+                    color: postFilter === filterOption ? 'white' : '#94a3b8',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: postFilter === filterOption ? '0 4px 12px rgba(16,185,129,0.3)' : 'none'
+                  }}
+                >
+                  {filterOption}
+                </button>
+              ))}
             </div>
 
             <div className="rp-posts-grid">
               {filteredMyPosts.length === 0 ? (
                 <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                  {searchQuery ? "No demands found matching your search." : "No demand posts yet."}
+                  {searchQuery ? "No demands found matching your search." : `No ${postFilter !== 'All' ? postFilter.toLowerCase() : ''} demand posts yet.`}
                 </div>
               ) : (
                 filteredMyPosts.map(post => (
@@ -1127,6 +1174,13 @@ const ReceiverPortal = () => {
                         onClick={() => togglePostStatus(post)}
                       >
                         {post.status === 'Fulfilled' ? 'Mark Active' : 'Mark Completed'}
+                      </button>
+                      <button
+                        className="text-btn"
+                        style={{ color: '#f87171', marginLeft: 'auto' }}
+                        onClick={(e) => handleDeletePost(post._id, e)}
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>

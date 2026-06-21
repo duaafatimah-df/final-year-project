@@ -8,7 +8,7 @@ import {
 import {
   Users, Package, AlertTriangle, TrendingUp, ShieldCheck, ShieldX,
   LogOut, Clock, CheckCircle2, XCircle, Globe, Link2, Building2,
-  UserCircle, RefreshCw, Ban, Trash2, Flag
+  UserCircle, RefreshCw, Ban, Trash2, Flag, FileText
 } from 'lucide-react';
 import './AdminPortal.css';
 
@@ -34,6 +34,7 @@ const AdminPortal = () => {
   const [pendingNGOs, setPendingNGOs] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [allDonations, setAllDonations] = useState([]);
+  const [allDemands, setAllDemands] = useState([]);
   const [allReports, setAllReports] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -42,6 +43,7 @@ const AdminPortal = () => {
   const [weeklyData, setWeeklyData] = useState(defaultWeeklyData);
   const [userFilter, setUserFilter] = useState('all');
   const [donationFilter, setDonationFilter] = useState('active');
+  const [demandFilter, setDemandFilter] = useState('all');
   const [expandedUserId, setExpandedUserId] = useState(null);
 
   const getH = () => ({ headers: { 'x-auth-token': localStorage.getItem('token') } });
@@ -81,6 +83,15 @@ const AdminPortal = () => {
       successCount++;
     } catch (err) {
       console.error("Donations fetch failed:", err.message);
+      failCount++;
+    }
+
+    try {
+      const res = await axios.get(`${API}/api/posts/all`, config);
+      setAllDemands(res.data);
+      successCount++;
+    } catch (err) {
+      console.error("Demands fetch failed:", err.message);
       failCount++;
     }
 
@@ -167,6 +178,24 @@ const AdminPortal = () => {
     } catch { showToast('Delete failed.', 'error'); }
   };
 
+  const handleDeleteDemand = async (id) => {
+    if (!window.confirm('Delete this demand post?')) return;
+    try {
+      await axios.delete(`${API}/api/posts/${id}`, getH());
+      showToast('🗑️ Demand post deleted');
+      fetchAll();
+    } catch { showToast('Delete failed.', 'error'); }
+  };
+
+  const handleToggleDemandStatus = async (post) => {
+    const newStatus = post.status === 'Fulfilled' ? 'Active' : 'Fulfilled';
+    try {
+      await axios.put(`${API}/api/posts/${post._id}/status`, { status: newStatus }, getH());
+      showToast(`✅ Status updated to ${newStatus}`);
+      fetchAll();
+    } catch { showToast('Failed to update status.', 'error'); }
+  };
+
   const handleReviewReport = async (id, status) => {
     try {
       await axios.put(`${API}/api/reports/${id}/review`, { status }, getH());
@@ -182,6 +211,7 @@ const AdminPortal = () => {
     { id: 'users', label: 'All Users', Icon: Users, count: stats.totalUsers },
     { id: 'pending', label: 'Pending NGOs', Icon: Clock, count: stats.pendingNGOs },
     { id: 'donations', label: 'Donations', Icon: Package, count: allDonations.length },
+    { id: 'demands', label: 'Receiver Demands', Icon: FileText, count: allDemands.length },
     { id: 'reports', label: 'Reports', Icon: Flag, count: stats.activeReports },
   ];
 
@@ -202,6 +232,12 @@ const AdminPortal = () => {
     if (donationFilter === 'claimed') return d.status === 'pending_receiver' || d.claimedBy || d.receiverId;
     if (donationFilter === 'expired') return isExpired;
     if (donationFilter === 'flagged') return d.reportCount > 0 || d.status === 'needs_review';
+    return true;
+  });
+
+  const filteredDemands = allDemands.filter(p => {
+    if (demandFilter === 'active') return p.status?.toLowerCase() === 'active';
+    if (demandFilter === 'fulfilled') return p.status?.toLowerCase() === 'fulfilled';
     return true;
   });
 
@@ -504,6 +540,85 @@ const AdminPortal = () => {
                               </button>
                             )}
                             <button className="btn-reject" style={{ padding: '5px 10px', fontSize: '0.75rem' }} onClick={() => handleDeleteDonation(d._id)}>
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── DEMANDS ── */}
+        {activeTab === 'demands' && (
+          <div className="admin-content animate-fade-in">
+            <div className="admin-page-header">
+              <div><h1>Receiver Demands</h1><p>Manage all demand posts submitted by NGOs and receivers.</p></div>
+              <button className="admin-refresh-btn" onClick={fetchAll}><RefreshCw size={16} /> Refresh</button>
+            </div>
+
+            <div className="admin-filter-bar">
+              {[
+                { id: 'all', label: 'All Demands' },
+                { id: 'active', label: 'Active Demands' },
+                { id: 'fulfilled', label: 'Fulfilled Demands' }
+              ].map(t => (
+                <button
+                  key={t.id}
+                  className={`admin-filter-btn ${demandFilter === t.id ? 'active' : ''}`}
+                  onClick={() => setDemandFilter(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="admin-verified-table-wrap">
+              <table className="admin-table">
+                <thead><tr><th>Demand Title</th><th>Receiver Name</th><th>Category</th><th>Urgency</th><th>Status</th><th>Posted Date</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {filteredDemands.map(p => {
+                    return (
+                      <tr key={p._id}>
+                        <td><strong style={{ fontSize: '0.88rem' }}>{p.title}</strong></td>
+                        <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                          <div>{p.receiverId?.name || 'N/A'}</div>
+                          {p.receiverId?.email && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{p.receiverId.email}</div>}
+                        </td>
+                        <td><span className="org-type-pill">{p.category || 'General'}</span></td>
+                        <td>
+                          <span style={{ 
+                            color: p.urgency === 'High' ? '#ef4444' : p.urgency === 'Medium' ? '#f59e0b' : '#10b981',
+                            fontWeight: 600,
+                            fontSize: '0.82rem'
+                          }}>{p.urgency}</span>
+                        </td>
+                        <td>
+                          <span className="pending-badge" style={{
+                            background: p.status?.toLowerCase() === 'active' ? 'rgba(16,185,129,0.1)' : 'rgba(59,130,246,0.1)',
+                            color: p.status?.toLowerCase() === 'active' ? '#10b981' : '#3b82f6',
+                            borderColor: p.status?.toLowerCase() === 'active' ? 'rgba(16,185,129,0.2)' : 'rgba(59,130,246,0.2)'
+                          }}>{p.status}</span>
+                        </td>
+                        <td style={{ fontSize: '0.78rem', color: '#64748b' }}>{new Date(p.createdAt).toLocaleDateString()}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button 
+                              className="btn-approve" 
+                              style={{ padding: '5px 10px', fontSize: '0.72rem' }} 
+                              onClick={() => handleToggleDemandStatus(p)}
+                            >
+                              {p.status === 'Fulfilled' ? 'Mark Active' : 'Mark Completed'}
+                            </button>
+                            <button 
+                              className="btn-reject" 
+                              style={{ padding: '5px 10px', fontSize: '0.72rem' }} 
+                              onClick={() => handleDeleteDemand(p._id)}
+                            >
                               <Trash2 size={13} />
                             </button>
                           </div>

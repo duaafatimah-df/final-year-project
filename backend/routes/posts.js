@@ -108,6 +108,22 @@ router.get('/my-posts', authMiddleware, async (req, res) => {
   }
 });
 
+// Get all posts (Admin only)
+router.get('/all', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const posts = await Post.find()
+      .populate('receiverId', 'name email phone city profilePic')
+      .sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    console.error('Fetch All Posts Error:', err.message);
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
+
 // Get all active posts (for donors to view)
 router.get('/active', async (req, res) => {
   try {
@@ -147,8 +163,8 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     let post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    // Ensure owner
-    if (post.receiverId.toString() !== req.user.userId) {
+    // Ensure owner or admin
+    if (post.receiverId.toString() !== req.user.userId && req.user.role !== 'admin') {
       return res.status(401).json({ error: 'Not authorized' });
     }
 
@@ -241,6 +257,25 @@ router.get('/nearby', async (req, res) => {
   } catch (err) {
     console.error('Nearby Posts Error:', err.message);
     res.status(500).json({ error: 'Server Error' });
+  }
+});
+
+// Delete a post
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    // Ensure owner or admin
+    if (post.receiverId.toString() !== req.user.userId && req.user.role !== 'admin') {
+      return res.status(401).json({ error: 'Not authorized' });
+    }
+
+    await Post.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Post removed successfully' });
+  } catch (err) {
+    console.error('Delete Post Error:', err.message);
+    res.status(500).send('Server Error');
   }
 });
 

@@ -551,7 +551,7 @@ const DonationWizard = () => {
       if (orgId !== 'general') {
         targetReceiverIds = [orgId];
       } else if (matches.length > 0) {
-        targetReceiverIds = matches.map(m => m.receiverId?._id).filter(Boolean);
+        targetReceiverIds = [...new Set(matches.map(m => m.receiverId?._id).filter(Boolean))];
       } else if (selectedNGOId) {
         targetReceiverIds = [selectedNGOId];
       }

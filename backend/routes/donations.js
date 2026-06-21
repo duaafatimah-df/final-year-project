@@ -371,8 +371,10 @@ AI Analysis: [Safety Score: ${donation.aiSafetyScore}%] ${donation.aiAnalysisRea
 Location: ${donation.location?.address || 'N/A'}
 Expiry: ${donation.expiryTime ? new Date(donation.expiryTime).toLocaleString('en-PK') : 'N/A'}`;
 
-    if (targetReceiverIds && targetReceiverIds.length > 0) {
-      for (const recId of targetReceiverIds) {
+    if (targetReceiverIds) {
+      const targets = Array.isArray(targetReceiverIds) ? targetReceiverIds : [targetReceiverIds];
+      const uniqueTargets = [...new Set(targets.filter(Boolean))];
+      for (const recId of uniqueTargets) {
         const newNotif = new Notification({
           donorId: req.user.userId,
           receiverId: recId,
@@ -805,6 +807,32 @@ router.post('/match-suggestions', authMiddleware, async (req, res) => {
       });
     }
 
+    const getSubCategory = (text, keywords = []) => {
+      const cleanText = (text || '').toLowerCase();
+      const cleanKws = (keywords || []).map(k => k.toLowerCase());
+      
+      const hasWord = (words) => {
+        return words.some(w => cleanText.includes(w) || cleanKws.includes(w));
+      };
+
+      if (hasWord(['pizza', 'burger', 'sandwich', 'fries', 'nuggets', 'fast food', 'fastfood', 'shawarma', 'roll', 'samosa', 'pasta'])) {
+        return 'fast_food';
+      }
+      if (hasWord(['biryani', 'rice', 'pulao', 'chawal'])) {
+        return 'rice';
+      }
+      if (hasWord(['meat', 'chicken', 'beef', 'mutton', 'karahi', 'kebab', 'tikka'])) {
+        return 'meat';
+      }
+      if (hasWord(['veg', 'vegetable', 'vegetables', 'potato', 'onion', 'tomato', 'sabzi', 'aloo'])) {
+        return 'vegetables';
+      }
+      if (hasWord(['fruit', 'fruits', 'apple', 'banana', 'orange', 'mango'])) {
+        return 'fruits';
+      }
+      return 'general';
+    };
+
     // Helper to calculate relevance score between donation title and post title/desc with AI keywords
     const calculateRelevanceScore = (donTitle, postTitle, postDesc, aiKeywords = []) => {
       const cleanDon = (donTitle || '').toLowerCase();
@@ -956,6 +984,14 @@ router.post('/match-suggestions', authMiddleware, async (req, res) => {
     // 3. Score & Classify matching priority levels
     const results = [];
     filteredMatches.forEach(m => {
+      const donSubCat = getSubCategory(title, keywords || []);
+      const postSubCat = getSubCategory(m.post.title + ' ' + (m.post.description || m.post.desc || ''), []);
+
+      // Conflict check: if both have specific sub-categories and they are different, exclude!
+      if (donSubCat !== 'general' && postSubCat !== 'general' && donSubCat !== postSubCat) {
+        return; // Skip this post as it is a sub-category conflict!
+      }
+
       let priority = 3; // default fallback priority
       const postCat = (m.post.category || '').toLowerCase();
       const donCat = (category || '').toLowerCase();

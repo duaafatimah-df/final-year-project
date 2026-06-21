@@ -291,7 +291,8 @@ const ContributorPortal = () => {
 
     // 1. Fetch active receiver posts
     if (postsRes.status === 'fulfilled') {
-      setReceiverDemands(postsRes.value.data);
+      const data = Array.isArray(postsRes.value?.data) ? postsRes.value.data : [];
+      setReceiverDemands(data);
       successCount++;
     } else {
       console.error("Failed to fetch posts:", postsRes.reason.message);
@@ -300,7 +301,8 @@ const ContributorPortal = () => {
 
     // 2. Fetch verified orgs
     if (orgsRes.status === 'fulfilled') {
-      const dynamicOrgs = orgsRes.value.data.map(r => ({
+      const rawData = Array.isArray(orgsRes.value?.data) ? orgsRes.value.data : [];
+      const dynamicOrgs = rawData.map(r => ({
         ...r,
         _id: r._id,
         orgType: r.orgType || 'NGO',
@@ -332,7 +334,8 @@ const ContributorPortal = () => {
 
     // 3. Fetch donor's own donations
     if (donRes.status === 'fulfilled') {
-      setMyDonations(donRes.value.data);
+      const data = Array.isArray(donRes.value?.data) ? donRes.value.data : [];
+      setMyDonations(data);
       successCount++;
     } else {
       console.error("Failed to fetch my donations:", donRes.reason.message);
@@ -341,7 +344,8 @@ const ContributorPortal = () => {
 
     // 4. Fetch donor notifications
     if (notifRes.status === 'fulfilled') {
-      setDonorNotifications(notifRes.value.data);
+      const data = Array.isArray(notifRes.value?.data) ? notifRes.value.data : [];
+      setDonorNotifications(data);
       successCount++;
     } else {
       console.error("Failed to fetch notifications:", notifRes.reason.message);
@@ -777,23 +781,23 @@ const ContributorPortal = () => {
                     </div>
                   </div>
                 )) : (
-                  <p>No organizations found matching your search.</p>
+                  <p>{t(lang, 'No organizations found matching your search.', 'آپ کی تلاش کے مطابق کوئی تنظیم نہیں ملی۔')}</p>
                 )}
               </div>
             </section>
 
             {/* Charity in Islam */}
             <section className="portal-section">
-              <h2 className="section-title">Charity in Islam</h2>
+              <h2 className="section-title">{t(lang, 'Charity in Islam', 'اسلام میں صدقہ و خیرات')}</h2>
               <div className="islamic-cards-grid">
                 <div className="islamic-card green-card">
                   <div className="arabic-text">وَمَا أَنفَقْتُم مِّن شَيْءٍ فَهُوَ يُخْلِفُهُ</div>
-                  <p className="translation-text">"And whatever you spend of good, He will replace it."</p>
+                  <p className="translation-text">{t(lang, '"And whatever you spend of good, He will replace it."', '"اور جو کچھ بھی تم (بھلائی میں) خرچ کرو گے، وہ اس کا نعم البدل دے گا۔"')}</p>
                   <span className="reference">- Surah Saba (34:39)</span>
                 </div>
                 <div className="islamic-card white-card">
                   <div className="arabic-text">خَيْرُ النَّاسِ أَنْفَعُهُمْ لِلنَّاسِ</div>
-                  <p className="translation-text">"The best of people are those that bring most benefit to the rest of mankind."</p>
+                  <p className="translation-text">{t(lang, '"The best of people are those that bring most benefit to the rest of mankind."', '"لوگوں میں سب سے بہتر وہ ہے جو دوسروں کو سب سے زیادہ فائدہ پہنچاتا ہے۔"')}</p>
                   <span className="reference">- Hadith (Daraqutni)</span>
                 </div>
               </div>
