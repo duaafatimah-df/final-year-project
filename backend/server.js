@@ -18,7 +18,12 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ─── MongoDB Connection ──────────────────────────────────────────────────────
 console.log('🔄 Connecting to MongoDB Atlas...');
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {
+  maxPoolSize: 1, // Crucial for Vercel Serverless to prevent hitting MongoDB Atlas 100-connection limit (SSL alert 80)
+  minPoolSize: 1,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000
+})
   .then(() => console.log('✅ Connected to MongoDB Atlas (SpareShare AI)'))
   .catch(err => console.error('❌ MongoDB connection error:', err.message));
 
@@ -29,7 +34,12 @@ app.use(async (req, res, next) => {
   }
   try {
     console.log(`🔌 MongoDB connection state is ${mongoose.connection.readyState}. Awaiting connection...`);
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      maxPoolSize: 1,
+      minPoolSize: 1,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
+    });
     console.log('✅ MongoDB connected successfully.');
     next();
   } catch (err) {
