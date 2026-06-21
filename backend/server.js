@@ -38,6 +38,20 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'SpareShare AI API is running', timestamp: new Date() });
 });
 
+// Diagnostic route
+app.get('/api/diagnose', (req, res) => {
+  const uri = process.env.MONGO_URI;
+  res.json({
+    hasMongoUri: !!uri,
+    mongoUriLength: uri ? uri.length : 0,
+    mongoUriPrefix: uri ? uri.substring(0, 20) : 'none',
+    connectionState: mongoose.connection.readyState, // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    envNodeEnv: process.env.NODE_ENV,
+    hasGeminiKey: !!process.env.GEMINI_API_KEY,
+    hasWebhookUrl: !!process.env.EMAIL_WEBHOOK_URL
+  });
+});
+
 // ─── Auto-Expiry Cron Job (every 15 minutes) ──────────────────────────────
 cron.schedule('*/15 * * * *', async () => {
   try {
