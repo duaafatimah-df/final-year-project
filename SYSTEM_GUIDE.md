@@ -1,142 +1,110 @@
-# SpareShare AI - Evaluation & Project Guide
+# SpareShare AI - Evaluation & Project Guide (Roman Urdu Version)
 
-This document is a comprehensive guide designed for your **Final Year Project (FYP) Evaluation**. It contains a detailed breakdown of all system features, the underlying artificial intelligence (AI) and machine learning (ML) models, how they work in the system, and a file-by-file walkthrough of the code implementation.
-
----
-
-## Part 1: AI & ML Features Guide
-
-This section explains the core features, the technologies/models used, what they are, and exactly how they are implemented in the code.
-
-### 1. Demand Forecasting
-* **Technology/Model:** Custom Aggressive Category-Time Trend Heuristic (backed up by Gemini 2.5 Flash / Python).
-* **What is it?** It is a trend prediction algorithm that analyzes past platform transactions (demands posted by NGOs, completed donations, and claims) to forecast next week's resource requirements for each category (Food, Medicine, Clothes, Grocery, Household).
-* **How it works in SpareShare AI:**
-  1. The admin accesses `/api/ai/demand-forecast` (handled in [ai.js](file:///c:/Users/HP/Downloads/Antigravity/backend/routes/ai.js#L37)).
-  2. The system queries Mongoose to count all active, pending, and completed donations and demands grouped by category.
-  3. It aggregates this data and applies a growth rate trend formula to project demand:
-     $$\text{Forecasted Demand} = \text{Active Demands} + (\text{Completed Claims} \times 1.2)$$
-  4. This outputs a percentage trend (e.g., "Food demand will rise by 15% next week") which helps donors plan their donations before uploading.
-
-### 2. Donation Image Scan & Classification
-* **Technology/Model:** `gemini-3.1-flash-lite` (Google's Multimodal Generative AI Model).
-* **What is it?** A state-of-the-art vision-language model trained to interpret both text and image inputs. It is optimized for high-speed image understanding and low latency.
-* **How it works in SpareShare AI:**
-  1. In the donor dashboard, the user uploads an image of a food or medicine item.
-  2. The frontend compresses the image to a Base64 string and calls the backend `/scan` route (in [donations.js](file:///c:/Users/HP/Downloads/Antigravity/backend/routes/donations.js#L117)).
-  3. The backend sends the image buffer to Gemini using a strict prompt instructions set:
-     * Identify the food item or medicine name.
-     * Estimate freshness and detect visual signs of spoilage.
-     * Detect quantity and condition.
-     * Return JSON containing: `detectedCategory`, `condition`, `freshness`, `estimatedItems`, `safetyScore`, and `matchReason`.
-
-### 3. Freshness & Safety Verification (AI Vision)
-* **Technology/Model:** `gemini-3.1-flash-lite` + Custom Heuristics.
-* **What is it?** An automated safety gating system that prevents users from posting contaminated or expired donations.
-* **How it works in SpareShare AI:**
-  1. During the image scan, Gemini assigns a `safetyScore` (0 to 100).
-  2. If the score is **$\ge 70$**, the donation is verified automatically (`isVerifiedSafe = true`, status = `active` / `pending_receiver`).
-  3. If the score is **$50 \text{ to } 69$**, the donation is flagged and marked as `needs_review` for manual admin inspection.
-  4. If the score is **$< 50$**, the backend automatically rejects the donation creation (returning HTTP 400).
-  5. **Medicine Exception:** For medicines, we have a custom override: if the safety score is low solely due to cosmetic packaging damage (like a bent carton corner), the backend overrides the safety score to 80 and approves it, provided the internal seal is intact (handled in [donations.js](file:///c:/Users/HP/Downloads/Antigravity/backend/routes/donations.js#L282)).
-
-### 4. OCR Expiry Date Extraction
-* **Technology/Model:** Google Gemini Vision OCR (Fallback: Tesseract OCR).
-* **What is it?** Optical Character Recognition (OCR) is a technology that recognizes and extracts printed or handwritten text characters inside digital images.
-* **How it works in SpareShare AI:**
-  1. When a donor scans a medicine item, the backend calls `aiService.extractExpiry(imageUrl)` (in [aiService.js](file:///c:/Users/HP/Downloads/Antigravity/backend/utils/aiService.js)).
-  2. Gemini OCR reads the packaging image to search for patterns matching date formats (e.g. `EXP 12/2026`, `MFG 08/2025`).
-  3. The extracted text is parsed. If the expiry date is in the past, or if the medicine has less than 30 days of shelf life remaining, the backend rejects the donation.
-
-### 5. Weather-Based Spoilage Enforcement
-* **Technology/Model:** OpenWeatherMap API + Travel Time Estimation Rules.
-* **What is it?** An environmental safety control that matches real-time weather temperature conditions with food transit times.
-* **How it works in SpareShare AI:**
-  1. Before listing a food donation, the backend queries the temperature of the donor's coordinates.
-  2. If the temperature is **$\ge 30^\circ\text{C}$ (Summer Alert)**, strict regulations are enforced:
-     * Prepared foods are restricted to a **2-hour delivery window**.
-     * The travel time between the donor and receiver is calculated using coordinates.
-     * If the travel time exceeds **20 minutes**, the system blocks the match to prevent food spoilage under high heat (handled in [donations.js](file:///c:/Users/HP/Downloads/Antigravity/backend/routes/donations.js#L161)).
-
-### 6. AI-Matched Receiver Demands & Conflict Filtering
-* **Technology/Model:** Custom Keyword Relevance Matrix + Sub-category Exclusion Logic.
-* **What is it?** A semantic recommendation engine that matches donor items with NGO demands based on description keywords, distance, and category priority.
-* **How it works in SpareShare AI:**
-  1. When a donation is scanned, the backend runs `/match-suggestions` (in [donations.js](file:///c:/Users/HP/Downloads/Antigravity/backend/routes/donations.js#L761)).
-  2. The system checks all active NGO posts. It calculates a relevance score by looking for overlaps between donation titles/AI keywords and post descriptions.
-  3. **Sub-category Conflict Filter:** To prevent mismatching (e.g., matching a donor's "sandwich" with an NGO's "1 meat plate" or "biryani boxes"), the system extracts specific sub-categories (`fast_food`, `rice`, `meat`, `vegetables`, `fruits`, `general`). If a donation and a post belong to conflicting specific sub-categories, the post is automatically excluded from recommendations.
-  4. The matching suggestions are sorted by: Relevance Score $\rightarrow$ Priority $\rightarrow$ Shortest Distance.
-
-### 7. Translation Engine (Urdu/English)
-* **Technology/Model:** `gemini-2.5-flash` + Local Cache.
-* **What is it?** A language translation system that translates user-generated English texts (like demand post titles, item descriptions, and notifications) into Urdu for better accessibility.
-* **How it works in SpareShare AI:**
-  1. When the portal language is Urdu, API requests pass `?lang=ur`.
-  2. The backend intercepts the list and calls `aiService.translate(text, 'ur')` (in [aiService.js](file:///c:/Users/HP/Downloads/Antigravity/backend/utils/aiService.js)).
-  3. Gemini 2.5 Flash translates the text.
-  4. The translated text is stored in an in-memory `translationCache` object to prevent redundant API calls and optimize loading speeds.
+Dosto! Ye guide aapke Final Year Project (FYP) Evaluation ke liye banayi gayi hai. Is guide mein hum detail mein cover karenge ke hamara system kya hai, iske features kya hain, kaunsi technology kahan use ho rahi hai, aur code files ka flow kya hai.
 
 ---
 
-## Part 2: Codebase Architecture & File Guide
+## Part 1: Mera System Kya Hai? (What is my system in detail?)
 
-Below is a detailed guide on what each core file in the backend and frontend does, and how they relate to the overall system.
+**SpareShare AI** aik online resource sharing platform hai jo food waste aur medicines ke safe redistribution ke liye banaya gaya hai. Yeh donors (restaurants, individuals, medical practitioners) aur receivers (NGOs, shelters, community clinics) ke darmiyan aik bridge ka kaam karta hai.
 
-```mermaid
-graph TD
-  A[Frontend: Netlify / React] -->|HTTPS Requests| B[Backend: Vercel Serverless / Node.js]
-  B -->|Database Queries| C[(MongoDB Atlas Database)]
-  B -->|API Calls| D[Google Gemini 3.1 & 2.5 API]
-  B -->|API Calls| E[Google Maps Distance Matrix API]
-  B -->|Webhooks| F[Google Apps Script Gmail Web App]
-```
+### Key Aspects:
+- **Donors** surplus (extra) food ya un-expired medicines donate kar sakte hain.
+- **AI Scanning** image se automatically check karti hai ke item safe hai ya nahi, aur uski expiry date aur freshness predict karti hai.
+- **Receivers (NGOs)** apni demands post kar sakte hain.
+- **AI Matching Recommendation** donors aur NGOs ko automatic match karti hai taake sahi item sahi jagah pohanche.
+- **Live Chat** receiver aur donor ko aapas mein pickup arrange karne ke liye direct chatting ki facility deti hai.
+- **Trust Scores** ratings and reviews se build hota hai taake fraud aur waste ko block kiya ja sake.
 
-### 1. Backend: Server Configuration (`backend/server.js`)
-* **What it does:** The main entry point of the Node.js Express server. It initializes middlewares (CORS, JSON parser), connects to MongoDB, and registers all API routes.
-* **Key Implementations:**
-  * **Database Connection Middleware:** Optimizes serverless cold starts. If Mongoose is disconnected or connecting, it intercepts requests and awaits a stable connection before proceeding.
-  * **maxPoolSize: 1:** Serverless containers (Vercel Lambdas) scale horizontally on demand. Standard connection pools create 5-10 connections per container, causing MongoDB Atlas Free Tier to crash with `SSL alert 80` (connection limit of 100 hit). Setting `maxPoolSize: 1` resolves this.
+---
 
-### 2. Backend: AI Service Handler (`backend/utils/aiService.js`)
-* **What it does:** The centralized service layer that manages calls to Google Generative AI (Gemini) and the python ML microservices.
-* **Key Implementations:**
-  * **Circuit Breaker:** If the Python AI service (hosted on Hugging Face) is offline or times out, the circuit breaker trips. Subsequent requests instantly bypass the python service and use local heuristics/Gemini fallback APIs, protecting the website from hanging.
-  * **Gemini 3.1 Flash Lite:** Configured with API key and instructions to run image scans.
-  * **Gemini 2.5 Flash:** Handles text translations.
+## Part 2: System Features & Technologies Used
 
-### 3. Backend: Auth & OTP Verification (`backend/routes/auth.js`)
-* **What it does:** Manages user authentication (Registration, Login, OTP verification).
-* **Key Implementations:**
-  * **Google Apps Script Webhook Integration:** Standard Node SMTP modules are blocked by Gmail security (`WebLoginRequired 534` error) on serverless deployments due to dynamic hosting IPs. We bypass this by sending an HTTP POST request to a Google Apps Script Web App. The script runs on Google's own servers and securely sends the email via `GmailApp.sendEmail`.
-  * **Master OTP Backdoor:** Inside `/verify-otp`, there is a master bypass key `123456` hardcoded. During evaluations/grading, if emails are delayed or if you are demonstrating offline, entering `123456` will always verify the user successfully.
+Hum barabar sab features aur unke peeche jo libraries/models use huway hain unko Roman Urdu mein asan alfaz mein samjhein ge.
 
-### 4. Backend: Donations Controller (`backend/routes/donations.js`)
-* **What it does:** Handles all donation lifecycles (Creation, AI scanning, claim logic, match suggestions, distance calculations).
-* **Key Implementations:**
-  * **`GET /my-donations`:** Fetches donations posted by a specific donor.
-  * **`GET /browse`:** Public feeds for receivers with filters and geo-distance calculations.
-  * **Deduplicated notifications:** Prevents sending multiple alerts to the same NGO if multiple demand posts match.
+### 1. Registration Security & Signup Validation
+- **Kya kaam kiya hai code mein?** Regex validation (Regular Expressions) backend `auth.js` aur frontend `Auth.jsx` dono jagah lagaya hai.
+- **Yeh technology kya hai?** Regex patterns hotey hain jo string characters ko format ke mutabiq validate karte hain.
+- **System mein kaise use ho rahi hai?**
+  - Username mein numbers block kiye hain (`/^[a-zA-Z\s]{3,}$/`).
+  - Email format ko check kiya jata hai (`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`).
+  - Passwords ke checks strict kiye hain (min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char).
 
-### 5. Backend: Demand Posts Controller (`backend/routes/posts.js`)
-* **What it does:** Manages NGO demand requests (Create, Read, Update status, Delete).
-* **Key Implementations:**
-  * **`GET /all`:** Fetching all posts on the platform (Admin dashboard only).
-  * **`DELETE /:id`:** Allows the owning receiver or an admin to delete a post.
-  * **`PUT /:id/status`:** Toggles post status (Active / Fulfilled).
+### 2. Multi-Image AI Scanning & Classification
+- **Kya kaam kiya hai code mein?** Gemini 3.1 Flash Lite API use ki hai. Frontend mein camera aur dropzone ko max 3 images upload karne ke liye upgrade kiya hai.
+- **Yeh technology kya hai?** Google Gemini AI aik advanced multimodal model hai jo images ko samajh sakta hai (Vision AI).
+- **System mein kaise use ho rahi hai?**
+  - Donors up to 3 images (front, back, sides) upload karte hain.
+  - API base64 array ko fetch kar ke Gemini system prompt ke sath analyse karti hai.
+  - Spoilage, item count, classification safety score aur classification reason return karti hai.
 
-### 6. Frontend: Contributor Portal (`frontend/src/pages/ContributorPortal.jsx`)
-* **What it does:** The dashboard for donors. It contains forms for creating donations, active map routing, AI scan loaders, and historical records.
-* **Key Implementations:**
-  * **Defensive Array Verification:** Checked with `Array.isArray` before mapping lists. Prevents page crashes if the browser disk cache corruption (`ERR_CACHE_WRITE_FAILURE`) returns undefined.
-  * **`handleTranslateDesc`:** Frontend trigger to translate descriptions to Urdu using Gemini.
+### 3. Expiry Date OCR Extraction
+- **Kya kaam kiya hai code mein?** Gemini Vision OCR (Google AI) backend `aiService.js` mein. Fallback: Python FastAPI microservice with Tesseract/EasyOCR.
+- **Yeh technology kya hai?** OCR (Optical Character Recognition) tasveer ke andar likhe huway text ko read karne ki capability hai.
+- **System mein kaise use ho rahi hai?**
+  - Medicine ke cases mein, Gemini OCR expiry formats (e.g. EXP 12/2026) ko parse karta hai.
+  - Agar item expired hai ya shelf life < 30 days hai, system listing ko automatically reject kar deta hai.
 
-### 7. Frontend: Receiver Portal (`frontend/src/pages/ReceiverPortal.jsx`)
-* **What it does:** The dashboard for NGOs. It handles profile updates, active demands list, and incoming requests.
-* **Key Implementations:**
-  * **Pill-based Status Filters:** Filter demands by "All", "Active", or "Fulfilled".
-  * **Delete Button:** Triggers backend post deletion and removes the item from the state immediately.
+### 4. Weather-Based Spoilage Enforcement
+- **Kya kaam kiya hai code mein?** OpenWeatherMap API + Location distance routing rules.
+- **Yeh technology kya hai?** Weather API real-time temperature aur climate metrics details deta hai coordinates ke basis pay.
+- **System mein kaise use ho rahi hai?**
+  - Agar location ka temperature $\ge 30^\circ\text{C}$ hai (Summer Alert), system food items ki transit limit tight kar deta hai.
+  - Delivery time limit 2 hours ho jati hai. Agar dono partners mein driving time > 20 mins hai, system matching block kar deta hai taake khana kharab na ho.
 
-### 8. Frontend: Admin Portal (`frontend/src/pages/AdminPortal.jsx`)
-* **What it does:** System analytics dashboard. Displays platform usage graphs, user roles, NGO verifications, reports, and demands.
-* **Key Implementations:**
-  * **Receiver Demands Tab:** Added to the sidebar menu. Displays all demand posts with options to toggle status and delete posts.
+### 5. In-App Coordination Chat System
+- **Kya kaam kiya hai code mein?** Express HTTP REST APIs + Mongoose Message Schema + Client-side Polling (every 4 seconds).
+- **Yeh technology kya hai?** Polling aik lightweight design pattern hai jo serverless environments (like Vercel) ke liye perfect hai, kyunki web-sockets cold starts aur serverless timeouts pay disconnect ho jate hain.
+- **System mein kaise use ho rahi hai?**
+  - Jab NGO donor ki request accept karti hai, tab chat option activate hota hai.
+  - Aapas mein messages exchange hote hain, jo MongoDB mein store hote hain aur direct coordination aasan banate hain.
+
+### 6. AI Category Forecasting
+- **Kya kaam kiya hai code mein?** Custom Aggressive Category-Time Trend Heuristic math formula.
+- **Yeh technology kya hai?** Mathematical projections jo historical demand data se future spikes predict karti hain.
+- **System mein kaise use ho rahi hai?**
+  - Admin view mein har category ki demand projection graph visible hota hai.
+  - Formula: $\text{Forecasted Demand} = \text{Active Demands} + (\text{Completed Claims} \times 1.2)$.
+
+### 7. Bilingual Translation Engine
+- **Kya kaam kiya hai code mein?** Gemini 2.5 Flash API + translationCache memory dictionary backend mein.
+- **Yeh technology kya hai?** Neural Machine Translation jo text ko English se Urdu mein translate karti hai.
+- **System mein kaise use ho rahi hai?**
+  - Jab user language toggle karta hai, tab system database texts (descriptions, names) ko translate kar ke show karta hai.
+  - Server latency save karne ke liye local cache use kiya hai.
+
+---
+
+## Part 3: Code Files and Flow Explanation
+
+### Flow of files, roles, functions:
+1. **`backend/server.js`**
+   - Express framework setup aur MongoDB Atlas integration file.
+   - Server configurations aur routes mapping.
+
+2. **`backend/models/Message.js`**
+   - Live chat conversations save karne ka database schema template.
+
+3. **`backend/models/Donation.js`**
+   - Donation listings database model (modified to support up to 3 image URLs array).
+
+4. **`backend/routes/auth.js`**
+   - User signups, password validations, master OTP (bypass key `123456`) and Apps Script Webhook trigger.
+
+5. **`backend/routes/chats.js`**
+   - Live chat REST endpoint APIs for receiving and saving message items.
+
+6. **`backend/routes/donations.js`**
+   - Donation endpoints, AI vision classification trigger, weather checks logic implementation.
+
+7. **`backend/utils/aiService.js`**
+   - Gemini API connection wrapper layer, translation cache, and fallback engine logic.
+
+8. **`frontend/src/pages/Auth.jsx`**
+   - User auth frontend UI dashboard with real-time field error formatting.
+
+9. **`frontend/src/pages/ContributorPortal.jsx`**
+   - Donor panel (camera snapshot capturing, dragzone support for 3 images, active thumbnail navigation carousel, inline coordination chat container).
+
+10. **`frontend/src/pages/ReceiverPortal.jsx`**
+   - Receiver panel (active NGO requests management, request/history details modal with carousel gallery display, inline coordination chat container).

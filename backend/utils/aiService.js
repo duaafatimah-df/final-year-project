@@ -65,7 +65,9 @@ function cleanToStandardCategory(cat) {
 
 const aiService = {
   // 1. Item Image Analysis (Multimodal AI - Gemini Vision)
-  analyzeItem: async (imageBase64, category) => {
+  analyzeItem: async (images, category) => {
+    const imageList = Array.isArray(images) ? images : [images];
+    const imageBase64 = imageList[0] || '';
     try {
       if (!process.env.GEMINI_API_KEY) {
         throw new Error('GEMINI_API_KEY is not set in .env');
@@ -153,27 +155,30 @@ RULES:
 `;
       }
 
-      // Extract pure base64
-      const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+      // Build parts array dynamically with text prompt and all images
+      const parts = [{ text: prompt }];
+      
+      for (const img of imageList) {
+        if (!img) continue;
+        const base64Data = img.includes(',') ? img.split(',')[1] : img;
+        
+        let mimeType = "image/jpeg";
+        if (img.startsWith("data:image/png")) mimeType = "image/png";
+        else if (img.startsWith("data:image/webp")) mimeType = "image/webp";
 
-      // Detect MIME type
-      let mimeType = "image/jpeg";
-      if (imageBase64.startsWith("data:image/png")) mimeType = "image/png";
-      else if (imageBase64.startsWith("data:image/webp")) mimeType = "image/webp";
+        parts.push({
+          inlineData: {
+            data: base64Data,
+            mimeType: mimeType
+          }
+        });
+      }
 
       const result = await model.generateContent({
         contents: [
           {
             role: "user",
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  data: base64Data,
-                  mimeType: mimeType
-                }
-              }
-            ]
+            parts: parts
           }
         ]
       });
@@ -260,13 +265,57 @@ RULES:
   },
 
   // 2. OCR Medicine Expiry
-  extractExpiry: async (imageBase64) => {
+  extractExpiry: async (images) => {
     try {
+      const imageList = Array.isArray(images) ? images : [images];
+      const imageBase64 = imageList[0] || '';
       const res = await callPythonService('POST', '/extract-expiry', { imageBase64 });
       return res;
     } catch (err) {
-      console.error('Python API Error (extractExpiry):', err.message);
-      throw new Error(err.response?.data?.detail || 'Python AI Service failed OCR extraction.');
+      console.warn('Python API Error (extractExpiry), falling back to Gemini OCR:', err.message);
+      try {
+        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+        const prompt = `
+Analyze the medicine packaging image(s) and extract the manufacturing date (MFG) and expiration date (EXP) if visible.
+Current date is ${new Date().toISOString().split('T')[0]}.
+Check if the medicine is expired or expires in less than 30 days.
+
+Return JSON ONLY:
+{
+  "isValid": boolean,
+  "expiryDate": "YYYY-MM-DD" or null,
+  "mfgDate": "YYYY-MM-DD" or null,
+  "message": "reason or warnings"
+}
+`;
+        const parts = [{ text: prompt }];
+        const imageList = Array.isArray(images) ? images : [images];
+        for (const img of imageList) {
+          if (!img) continue;
+          const base64Data = img.includes(',') ? img.split(',')[1] : img;
+          let mimeType = "image/jpeg";
+          if (img.startsWith("data:image/png")) mimeType = "image/png";
+          else if (img.startsWith("data:image/webp")) mimeType = "image/webp";
+          parts.push({
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType
+            }
+          });
+        }
+        const result = await model.generateContent({
+          contents: [{ role: "user", parts }]
+        });
+        const rawText = result.response.text().trim();
+        const jsonMatch = rawText.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+        throw new Error("Invalid Gemini response format");
+      } catch (geminiErr) {
+        console.error("Gemini OCR Fallback failed:", geminiErr.message);
+        throw new Error("OCR extraction failed: " + geminiErr.message);
+      }
     }
   },
 

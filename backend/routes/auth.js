@@ -10,10 +10,61 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecret';
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, phone, role, taxId, orgType } = req.body;
+    const { name, email, password, phone, role, taxId, orgType, regAuthority, estYear } = req.body;
     
-    if (!phone) {
-      return res.status(400).json({ error: 'Phone number is required' });
+    // Phone Validation: Pakistani mobile numbers
+    const pkPhoneRegex = /^((\+92)|(0092)|0)?(3\d{9})$/;
+    if (!phone || !pkPhoneRegex.test(phone.replace(/[\s-]/g, ''))) {
+      return res.status(400).json({ error: 'Please provide a valid Pakistani mobile number (e.g., 03001234567).' });
+    }
+
+    // Name Validation: Only alphabetic letters and spaces, min length 3
+    const nameRegex = /^[a-zA-Z\s]{3,}$/;
+    if (!name || !nameRegex.test(name)) {
+      return res.status(400).json({ error: 'Name must contain only alphabetic characters and spaces, and be at least 3 characters long.' });
+    }
+
+    // Email Domain Validation Helper
+    const validateEmailDomain = (emailVal) => {
+      const parts = emailVal.split('@');
+      if (parts.length !== 2) return false;
+      const domain = parts[1].toLowerCase();
+      const allowedPublicDomains = [
+        'gmail.com', 'yahoo.com', 'ymail.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+        'live.com', 'yandex.com', 'protonmail.com', 'zoho.com',
+        'gmx.com', 'aol.com', 'proton.me', 'mail.ru'
+      ];
+      return allowedPublicDomains.includes(domain);
+    };
+
+    // Email Validation: Valid email format and real domain
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email) || !validateEmailDomain(email)) {
+      return res.status(400).json({ error: 'Please provide a valid email address using a real provider (e.g. Gmail, Yahoo, Outlook) or custom NGO/organization domain.' });
+    }
+
+    // Password Validation: Strong password (min 8 chars, 1 upper, 1 lower, 1 digit, 1 special char)
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!password || !passwordRegex.test(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long, and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).' });
+    }
+
+    // Receiver Specific Validations
+    if (role === 'receiver') {
+      if (!taxId || taxId.trim().length < 5) {
+        return res.status(400).json({ error: 'NGO Registration/License Number is required for verification (min 5 characters).' });
+      }
+      if (!orgType) {
+        return res.status(400).json({ error: 'Organization Type is required.' });
+      }
+      if (!regAuthority || regAuthority.trim().length < 3) {
+        return res.status(400).json({ error: 'Registration Authority Name is required.' });
+      }
+      const currentYear = new Date().getFullYear();
+      const yearNum = parseInt(estYear, 10);
+      if (!estYear || !/^\d{4}$/.test(estYear) || yearNum < 1800 || yearNum > currentYear) {
+        return res.status(400).json({ error: `Valid Year of Establishment between 1800 and ${currentYear} is required.` });
+      }
     }
     
     // Check if user exists
@@ -28,8 +79,10 @@ router.post('/register', async (req, res) => {
         user.phone = phone;
         user.password = hashedPassword;
         user.role = role;
-        user.taxId = taxId;
-        user.orgType = orgType;
+        user.taxId = role === 'receiver' ? taxId : undefined;
+        user.orgType = role === 'receiver' ? orgType : undefined;
+        user.regAuthority = role === 'receiver' ? regAuthority : undefined;
+        user.estYear = role === 'receiver' ? estYear : undefined;
         
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         user.emailVerificationOtp = otp;
@@ -60,8 +113,10 @@ router.post('/register', async (req, res) => {
       phone,
       password: hashedPassword,
       role,
-      taxId,
-      orgType,
+      taxId: role === 'receiver' ? taxId : undefined,
+      orgType: role === 'receiver' ? orgType : undefined,
+      regAuthority: role === 'receiver' ? regAuthority : undefined,
+      estYear: role === 'receiver' ? estYear : undefined,
       isVerified: false, // Must verify email first, and receivers must get approved by admin
       isEmailVerified: false,
       emailVerificationOtp: otp,

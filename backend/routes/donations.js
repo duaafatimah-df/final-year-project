@@ -117,7 +117,7 @@ function validateDonation(category, expiryTime, foodPreparedTime, isSealed) {
 router.post('/scan', authMiddleware, async (req, res) => {
   try {
     const { imageUrl, category } = req.body;
-    if (!imageUrl) {
+    if (!imageUrl || (Array.isArray(imageUrl) && imageUrl.length === 0)) {
       return res.status(400).json({ error: 'Image is required for AI scan.' });
     }
 

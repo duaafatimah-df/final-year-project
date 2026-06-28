@@ -8,7 +8,7 @@ import {
   LogOut, Search, Globe, Home, Activity, Calculator,
   UploadCloud, MapPin, ScanLine, Sun, Clock, Send, ShieldCheck,
   ChevronLeft, ChevronRight, UserCircle, X, Heart, History, Building2, Sparkles, Zap, Image as ImageIcon, Bell, Trash2, Star, Camera, Menu,
-  TrendingUp
+  TrendingUp, Package, MessageSquare, Minus, ChevronUp
 } from "lucide-react";
 import { organizations } from './Home';
 import ZakatCalculator from './ZakatCalculator';
@@ -20,6 +20,39 @@ import './ContributorPortal.css';
 const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
   : (import.meta.env.VITE_API_URL || 'https://spareshare-ai.up.railway.app');
+
+const playChime = () => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+    
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(880, now);
+    gain1.gain.setValueAtTime(0.1, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.8);
+    
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(659.25, now + 0.15);
+    gain2.gain.setValueAtTime(0.08, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.95);
+  } catch (err) {
+    console.error('Audio chime failed:', err);
+  }
+};
 
 const compressImage = (base64Str, maxWidth = 400, maxHeight = 400) => {
   return new Promise((resolve) => {
@@ -92,8 +125,37 @@ const ContributorPortal = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Donation Form State
-  const [file, setFile] = useState(null);
+  // Donation Form State & Chat States
+  const [files, setFiles] = useState([]);
+  const [activeHistoryImgIdx, setActiveHistoryImgIdx] = useState(0);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatText, setChatText] = useState('');
+  const [isFetchingChat, setIsFetchingChat] = useState(false);
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [activeChatDonationId, setActiveChatDonationId] = useState(null);
+  const [activeChatDonation, setActiveChatDonation] = useState(null);
+  const [chatNotification, setChatNotification] = useState(null);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
+  const [chatPosition, setChatPosition] = useState(null); // { x, y }
+  const [notifTypeFilter, setNotifTypeFilter] = useState('donations'); // 'donations' | 'messages'
+  const [recentChatMessages, setRecentChatMessages] = useState([]);
+  const [readMessageIds, setReadMessageIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('readMessageIds') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const isFirstPoll = useRef(true);
+  
+  useEffect(() => {
+    if (activeChatDonationId) {
+      setIsChatMinimized(false);
+      setChatPosition(null);
+    }
+  }, [activeChatDonationId]);
+
+  const processedMessageIds = useRef(new Set());
   const [donTitle, setDonTitle] = useState('');
   const [category, setCategory] = useState('');
   const [itemType, setItemType] = useState('');
@@ -226,6 +288,10 @@ const ContributorPortal = () => {
 
   const capturePhoto = () => {
     if (videoRef.current) {
+      if (files.length >= 3) {
+        alert("You can scan a maximum of 3 images.");
+        return;
+      }
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 640;
@@ -237,12 +303,22 @@ const ContributorPortal = () => {
       fetch(dataUrl)
         .then(res => res.blob())
         .then(blob => {
-          const capturedFile = new File([blob], "camera_capture.jpg", { type: "image/jpeg" });
+          const capturedFile = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: "image/jpeg" });
           Object.assign(capturedFile, {
             preview: dataUrl
           });
-          setFile(capturedFile);
-          stopCamera();
+          setFiles(prev => {
+            const newFiles = [...prev, capturedFile];
+            if (newFiles.length >= 3) {
+              // Stop camera when we hit 3 images
+              if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+              }
+              setIsCameraActive(false);
+            }
+            return newFiles;
+          });
         });
     }
   };
@@ -428,11 +504,167 @@ const ContributorPortal = () => {
 
   // Dropzone setup
   const onDrop = useCallback(acceptedFiles => {
-    if (acceptedFiles.length > 0) {
-      setFile(Object.assign(acceptedFiles[0], { preview: URL.createObjectURL(acceptedFiles[0]) }));
-    }
+    setFiles(prev => {
+      const updated = [...prev];
+      for (const f of acceptedFiles) {
+        if (updated.length < 3) {
+          updated.push(Object.assign(f, { preview: URL.createObjectURL(f) }));
+        }
+      }
+      return updated;
+    });
   }, []);
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'image/*': [] }, maxFiles: 1 });
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({ onDrop, accept: { 'image/*': [] }, maxFiles: 3 });
+
+  const handleChatDragStart = (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('button')) return;
+
+    const chatElem = e.currentTarget.closest('.chat-drawer-container');
+    if (!chatElem) return;
+
+    const rect = chatElem.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialX = rect.left;
+    const initialY = rect.top;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+
+      const chatWidth = 380;
+      const chatHeight = isChatMinimized ? 60 : 480;
+      const newX = Math.max(0, Math.min(window.innerWidth - chatWidth, initialX + deltaX));
+      const newY = Math.max(0, Math.min(window.innerHeight - chatHeight, initialY + deltaY));
+
+      setChatPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const fetchChatMessages = useCallback(async (donationId) => {
+    if (!donationId) return;
+    try {
+      const res = await axios.get(`${API}/api/chats/${donationId}`, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
+      setChatMessages(prev => {
+        if (res.data.length > prev.length) {
+          const lastMsg = res.data[res.data.length - 1];
+          const prevLastMsg = prev[prev.length - 1];
+          if (lastMsg && (!prevLastMsg || prevLastMsg._id !== lastMsg._id) && !lastMsg._id.startsWith('temp-')) {
+            const currentUserId = user?.id || user?._id;
+            const senderIdStr = lastMsg.senderId?._id || lastMsg.senderId;
+            if (senderIdStr && senderIdStr !== currentUserId) {
+              playChime();
+              setChatNotification({
+                senderName: lastMsg.senderId?.name || 'Receiver',
+                text: lastMsg.text
+              });
+              setTimeout(() => setChatNotification(null), 5000);
+            }
+          }
+        }
+        return res.data;
+      });
+    } catch (err) {
+      console.error('Failed to fetch chat messages:', err);
+    }
+  }, [user]);
+
+  const sendChatMessage = async (e) => {
+    if (e) e.preventDefault();
+    const messageText = chatText.trim();
+    if (!messageText || !activeChatDonationId) return;
+
+    setChatText('');
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg = {
+      _id: tempId,
+      text: messageText,
+      senderId: { _id: user?.id || user?._id, name: user?.name || 'Me' },
+      createdAt: new Date().toISOString()
+    };
+    setChatMessages(prev => [...prev, optimisticMsg]);
+
+    try {
+      const res = await axios.post(`${API}/api/chats/${activeChatDonationId}`, {
+        text: messageText
+      }, {
+        headers: { 'x-auth-token': localStorage.getItem('token') }
+      });
+      setChatMessages(prev => prev.map(msg => msg._id === tempId ? res.data : msg));
+    } catch (err) {
+      console.error('Failed to send chat message:', err);
+      setChatMessages(prev => prev.filter(msg => msg._id !== tempId));
+      alert('Failed to send message. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    if (!activeChatDonationId) return;
+    fetchChatMessages(activeChatDonationId);
+    const interval = setInterval(() => {
+      fetchChatMessages(activeChatDonationId);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [activeChatDonationId, fetchChatMessages]);
+
+  useEffect(() => {
+    const pollAllRecent = async () => {
+      try {
+        const res = await axios.get(`${API}/api/chats/all/recent`, {
+          headers: { 'x-auth-token': localStorage.getItem('token') }
+        });
+        const fetchedMessages = Array.isArray(res.data) ? res.data : [];
+        setRecentChatMessages(fetchedMessages);
+
+        fetchedMessages.forEach(msg => {
+          const msgId = msg._id;
+          const isMe = (msg.senderId?._id || msg.senderId) === (user?.id || user?._id);
+          
+          if (!processedMessageIds.current.has(msgId)) {
+            processedMessageIds.current.add(msgId);
+            if (!isFirstPoll.current && !isMe) {
+              playChime();
+              setChatNotification({
+                senderName: msg.senderId?.name || 'Partner',
+                donationTitle: msg.donationId?.title || 'Donation Item',
+                text: msg.text,
+                donationId: msg.donationId?._id || msg.donationId
+              });
+              setTimeout(() => setChatNotification(null), 5000);
+            }
+          }
+        });
+
+        // Also if we have active chat open, trigger message fetch immediately if there are new messages for it
+        const hasNewForActive = fetchedMessages.some(msg => {
+          const msgDonationId = msg.donationId?._id || msg.donationId;
+          return activeChatDonationId && activeChatDonationId === msgDonationId && (msg.senderId?._id || msg.senderId) !== (user?.id || user?._id);
+        });
+        if (hasNewForActive) {
+          fetchChatMessages(activeChatDonationId);
+        }
+
+        isFirstPoll.current = false;
+      } catch (err) {
+        console.error('Failed to poll recent messages:', err);
+      }
+    };
+    pollAllRecent();
+    const interval = setInterval(pollAllRecent, 2000);
+    return () => clearInterval(interval);
+  }, [activeChatDonationId, fetchChatMessages, user]);
 
   const handleLogout = () => {
     logout();
@@ -443,7 +675,7 @@ const ContributorPortal = () => {
     e.preventDefault();
     setValidationError('');
 
-    if (!file) { setValidationError('An image is required.'); return; }
+    if (files.length === 0) { setValidationError('An image is required.'); return; }
     // Client-side validation
     const now = new Date();
 
@@ -478,85 +710,91 @@ const ContributorPortal = () => {
     setActiveTab('ai_dashboard');
     setIsScanning(true);
 
-    // Convert image to base64 for storage
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const rawImageUrl = reader.result;
-        const imageUrl = await compressImage(rawImageUrl);
-        const res = await axios.post(`${API}/api/donations`, {
-          title: donTitle,
-          category,
-          itemType: itemType || category,
-          condition: condition || 'Good',
-          quantity,
-          description,
-          foodPreparedTime: (category === 'Food' && foodPreparedTime) ? new Date(foodPreparedTime).toISOString() : null,
-          expiryTime: (category === 'Medicine' && expiryTime) ? new Date(expiryTime).toISOString() : null,
-          isSealed,
-          lat: donLat,
-          lng: donLng,
-          address: location,
-          imageUrl,
-        }, { headers: { 'x-auth-token': localStorage.getItem('token') } });
+    try {
+      const fileToBase64 = (f) => new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = (err) => reject(err);
+        r.readAsDataURL(f);
+      });
 
-        // Success
-        setCurrentDonationId(res.data._id);
-        setAiKeywords(res.data.aiKeywords || []);
-        const detectedCat = res.data.aiDetectedItems || res.data.category;
-        setAiResult({
-          safetyScore: res.data.aiSafetyScore || 90,
-          recommendation: res.data.status === 'rejected' ? 'Rejected' : res.data.isVerifiedSafe ? 'Accept' : 'Review',
-          itemName: res.data.title || 'Donation Item',
-          safetyNotes: res.data.aiAnalysisReason || 'Safe for distribution.',
-          detectedCategory: detectedCat,
-          condition: condition || (res.data.isSealed ? 'Sealed/New' : 'Open/Used'),
-          freshness: res.data.status === 'rejected' ? 'Spoiled/Unsafe' : 'Verified',
-          estimatedItems: res.data.quantity || 'Unknown',
-          matchReason: res.data.status === 'rejected' ? 'Safety limits exceeded. Item blocked.' : 'Matched to nearby demand based on AI engine.'
-        });
+      const base64Promises = files.map(async (f) => {
+        const raw = await fileToBase64(f);
+        return await compressImage(raw);
+      });
+      const imageUrls = await Promise.all(base64Promises);
 
-        // Query backend database matching suggestions for the AI classified category
-        if (res.data.status !== 'rejected') {
-          try {
-            const suggestionsRes = await axios.post(`${API}/api/donations/match-suggestions`, {
-              category: detectedCat,
-              lat: donLat,
-              lng: donLng,
-              title: donTitle,
-              description: description,
-              keywords: res.data.aiKeywords || []
-            }, { headers: { 'x-auth-token': localStorage.getItem('token') } });
+      const res = await axios.post(`${API}/api/donations`, {
+        title: donTitle,
+        category,
+        itemType: itemType || category,
+        condition: condition || 'Good',
+        quantity,
+        description,
+        foodPreparedTime: (category === 'Food' && foodPreparedTime) ? new Date(foodPreparedTime).toISOString() : null,
+        expiryTime: (category === 'Medicine' && expiryTime) ? new Date(expiryTime).toISOString() : null,
+        isSealed,
+        lat: donLat,
+        lng: donLng,
+        address: location,
+        imageUrl: imageUrls,
+      }, { headers: { 'x-auth-token': localStorage.getItem('token') } });
 
-            const response = suggestionsRes;
-            const aiMatches = response.data.matches || [];
-            console.log("MATCH API RESPONSE", response.data);
-            console.log("MATCHES STATE", aiMatches);
+      // Success
+      setCurrentDonationId(res.data._id);
+      setAiKeywords(res.data.aiKeywords || []);
+      const detectedCat = res.data.aiDetectedItems || res.data.category;
+      setAiResult({
+        safetyScore: res.data.aiSafetyScore || 90,
+        recommendation: res.data.status === 'rejected' ? 'Rejected' : res.data.isVerifiedSafe ? 'Accept' : 'Review',
+        itemName: res.data.title || 'Donation Item',
+        safetyNotes: res.data.aiAnalysisReason || 'Safe for distribution.',
+        detectedCategory: detectedCat,
+        condition: condition || (res.data.isSealed ? 'Sealed/New' : 'Open/Used'),
+        freshness: res.data.status === 'rejected' ? 'Spoiled/Unsafe' : 'Verified',
+        estimatedItems: res.data.quantity || 'Unknown',
+        matchReason: res.data.status === 'rejected' ? 'Safety limits exceeded. Item blocked.' : 'Matched to nearby demand based on AI engine.'
+      });
 
-            setAiMatches(aiMatches);
-            setFallbackNGOs(response.data.fallbackNGOs || []);
-          } catch (suggestErr) {
-            console.error("Failed to load match suggestions:", suggestErr);
-            setAiMatches([]);
-            setFallbackNGOs([]);
-          }
-        } else {
+      // Query backend database matching suggestions for the AI classified category
+      if (res.data.status !== 'rejected') {
+        try {
+          const suggestionsRes = await axios.post(`${API}/api/donations/match-suggestions`, {
+            category: detectedCat,
+            lat: donLat,
+            lng: donLng,
+            title: donTitle,
+            description: description,
+            keywords: res.data.aiKeywords || []
+          }, { headers: { 'x-auth-token': localStorage.getItem('token') } });
+
+          const response = suggestionsRes;
+          const aiMatches = response.data.matches || [];
+          console.log("MATCH API RESPONSE", response.data);
+          console.log("MATCHES STATE", aiMatches);
+
+          setAiMatches(aiMatches);
+          setFallbackNGOs(response.data.fallbackNGOs || []);
+        } catch (suggestErr) {
+          console.error("Failed to load match suggestions:", suggestErr);
           setAiMatches([]);
           setFallbackNGOs([]);
         }
-
-        setIsScanning(false);
-        setScanComplete(true);
-        fetchData(); // refresh donations list
-
-      } catch (err) {
-        setIsScanning(false);
-        setScanComplete(true);
-        const msg = err.response?.data?.error || 'Failed to submit donation.';
-        setAiError(msg);
+      } else {
+        setAiMatches([]);
+        setFallbackNGOs([]);
       }
-    };
-    reader.readAsDataURL(file);
+
+      setIsScanning(false);
+      setScanComplete(true);
+      fetchData(); // refresh donations list
+
+    } catch (err) {
+      setIsScanning(false);
+      setScanComplete(true);
+      const msg = err.response?.data?.error || 'Failed to submit donation.';
+      setAiError(msg);
+    }
   };
 
   const handleSendNotification = async (post) => {
@@ -603,6 +841,45 @@ const ContributorPortal = () => {
         </div>
       )}
 
+      {chatNotification && (
+        <div className="pp-toast info" style={{ 
+          position: 'fixed', 
+          bottom: '80px', 
+          right: '20px', 
+          zIndex: 100000, 
+          background: 'rgba(15, 23, 42, 0.95)', 
+          color: 'white', 
+          padding: '16px', 
+          borderRadius: '16px', 
+          boxShadow: '0 10px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)', 
+          maxWidth: '320px', 
+          borderLeft: '5px solid #10b981',
+          backdropFilter: 'blur(8px)',
+          fontFamily: 'sans-serif'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+            <div>
+              <span style={{ fontWeight: 800, fontSize: '0.8rem', color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💬 New Message</span>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                Re: <strong style={{ color: '#cbd5e1' }}>{chatNotification.donationTitle}</strong>
+              </div>
+            </div>
+            <button 
+              onClick={() => setChatNotification(null)} 
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ fontSize: '0.85rem', color: '#f1f5f9', fontWeight: 600, marginBottom: '4px' }}>
+            {chatNotification.senderName}:
+          </div>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>
+            {chatNotification.text}
+          </p>
+        </div>
+      )}
+
       {/* Portal Custom Header */}
       {/* Portal Custom Header */}
       <header className="portal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -634,11 +911,19 @@ const ContributorPortal = () => {
           </button>
           <button className={`nav-tab ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => { setActiveTab('notifications'); fetchData(); }}>
             <Bell size={18} /> {lang === 'Eng' ? 'Notifications' : 'اطلاعات'}
-            {donorNotifications.filter(n => n.status === 'accepted' || n.status === 'rejected').length > 0 && (
-              <span style={{ marginLeft: 4, background: '#ef4444', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
-                {donorNotifications.filter(n => n.status === 'accepted' || n.status === 'rejected').length}
-              </span>
-            )}
+            {(() => {
+              const systemNotifsCount = donorNotifications.filter(n => n.status === 'accepted' || n.status === 'rejected').length;
+              const unreadMessagesCount = recentChatMessages.filter(msg => (msg.senderId?._id || msg.senderId) !== (user?.id || user?._id) && !readMessageIds.includes(msg._id)).length;
+              const totalNotificationsBadgeCount = systemNotifsCount + unreadMessagesCount;
+              if (totalNotificationsBadgeCount > 0) {
+                return (
+                  <span style={{ marginLeft: 4, background: '#ef4444', color: 'white', borderRadius: 99, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 800 }}>
+                    {totalNotificationsBadgeCount}
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </button>
         </nav>
 
@@ -823,8 +1108,31 @@ const ContributorPortal = () => {
                   <div className="form-col">
                     <label>{t(lang, 'Upload Item Image', 'آئٹم کی تصویر اپ لوڈ کریں')} <span style={{ color: '#ef4444' }}>*</span></label>
                     {isCameraActive ? (
-                      <div className="camera-container" style={{ position: 'relative', width: '100%', minHeight: '260px', backgroundColor: '#000', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
-                        <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', maxHeight: '300px', objectFit: 'cover' }} />
+                      <div className="camera-container" style={{ position: 'relative', width: '100%', minHeight: '340px', backgroundColor: '#000', borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '10px', marginBottom: '1rem' }}>
+                        {/* Previews of already captured images */}
+                        {files.length > 0 && (
+                          <div className="captured-previews" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '12px' }}>
+                            {files.map((f, idx) => (
+                              <div key={idx} style={{ position: 'relative', width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', border: '1.5px solid #10b981' }}>
+                                <img src={f.preview} alt="Captured Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <button
+                                  type="button"
+                                  onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
+                                  style={{
+                                    position: 'absolute', top: '2px', right: '2px',
+                                    background: 'rgba(239, 68, 68, 0.85)', color: 'white',
+                                    border: 'none', borderRadius: '50%', width: '16px', height: '16px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '9px', cursor: 'pointer'
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', maxHeight: '240px', objectFit: 'cover', borderRadius: '12px' }} />
                         <div style={{ position: 'absolute', bottom: '15px', left: '0', right: '0', display: 'flex', justifyContent: 'center', gap: '15px' }}>
                           <button 
                             type="button"
@@ -844,18 +1152,45 @@ const ContributorPortal = () => {
                       </div>
                     ) : (
                       <>
-                        <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
-                          <input {...getInputProps()} />
-                          {file ? (
-                            <img src={file.preview} alt="Upload" className="drop-preview" />
+                        <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`} style={{ cursor: files.length >= 3 ? 'not-allowed' : 'pointer' }}>
+                          <input {...getInputProps()} disabled={files.length >= 3} />
+                          {files.length > 0 ? (
+                            <div className="thumbnails-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }} onClick={e => e.stopPropagation()}>
+                              {files.map((f, idx) => (
+                                <div key={idx} style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                  <img src={f.preview} alt="Upload Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  <button
+                                    type="button"
+                                    onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
+                                    style={{
+                                      position: 'absolute', top: '2px', right: '2px',
+                                      background: 'rgba(239, 68, 68, 0.85)', color: 'white',
+                                      border: 'none', borderRadius: '50%', width: '18px', height: '18px',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      fontSize: '10px', cursor: 'pointer'
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                              {files.length < 3 && (
+                                <div 
+                                  onClick={(e) => { e.stopPropagation(); open(); }}
+                                  style={{ width: '80px', height: '80px', border: '2px dashed rgba(255,255,255,0.15)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '20px', cursor: 'pointer' }}
+                                >
+                                  +
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <div className="drop-placeholder">
                               <UploadCloud size={40} className="text-primary" />
-                              <p>{t(lang, 'Drag & drop image here, or click to select', 'تصویر یہاں ڈریگ کریں یا منتخب کرنے کے لیے کلک کریں')}</p>
+                              <p>{t(lang, 'Drag & drop images here (Max 3), or click to select', 'تصاویر یہاں ڈریگ کریں (زیادہ سے زیادہ 3) یا کلک کریں')}</p>
                             </div>
                           )}
                         </div>
-                        {!file && (
+                        {files.length < 3 && (
                           <button 
                             type="button"
                             onClick={startCamera} 
@@ -1046,7 +1381,7 @@ const ContributorPortal = () => {
                       </div>
                     )}
 
-                    <button type="submit" className="btn btn-primary submit-donate-btn" disabled={!file || !location || !category || !donTitle || !itemType}>
+                    <button type="submit" className="btn btn-primary submit-donate-btn" disabled={files.length === 0 || !location || !category || !donTitle || !itemType}>
                       {t(lang, 'Start AI Scan', 'اے آئی اسکین شروع کریں')} <ArrowRight size={18} />
                     </button>
                   </div>
@@ -1108,9 +1443,9 @@ const ContributorPortal = () => {
                     
                     {/* Status Hero Card (Scanned Image, Title, Score gauge) */}
                     <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-xl)', padding: '1.75rem', position: 'relative', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                      {file?.preview && (
+                      {files[0]?.preview && (
                         <div style={{ width: '130px', height: '130px', borderRadius: '12px', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.15)', cursor: 'pointer', position: 'relative', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)', flexShrink: 0 }} onClick={() => setIsImageZoomed(true)}>
-                          <img src={file.preview} alt="Scanned preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={files[0].preview} alt="Scanned preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.3s ease', color: 'white', fontWeight: 700, fontSize: '0.75rem' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0}>🔍 Zoom</div>
                         </div>
                       )}
@@ -1588,7 +1923,7 @@ const ContributorPortal = () => {
                                     cursor: 'pointer', 
                                     transition: 'all 0.2s' 
                                   }} 
-                                  onClick={() => setSelectedHistoryDonation(don)} 
+                                  onClick={() => { setSelectedHistoryDonation(don); setActiveHistoryImgIdx(0); }} 
                                   onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} 
                                   onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                                 >
@@ -1602,7 +1937,7 @@ const ContributorPortal = () => {
                                     <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                                       {/* Donation image */}
                                       {don.imageUrl ? (
-                                        <img src={don.imageUrl} alt="Donation" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: '2px solid rgba(255,255,255,0.08)', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
+                                        <img src={Array.isArray(don.imageUrl) ? don.imageUrl[0] : don.imageUrl} alt="Donation" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: '2px solid rgba(255,255,255,0.08)', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />
                                       ) : (
                                         <div style={{ width: 90, height: 90, borderRadius: 10, background: 'rgba(16,185,129,0.08)', border: '2px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                           <Heart size={36} color="#10b981" />
@@ -1689,9 +2024,6 @@ const ContributorPortal = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <h2 style={{ margin: 0 }}>{t(lang, 'Notification Center', 'اطلاعات کا مرکز')}</h2>
-                <span style={{ background: '#f0fdf4', color: '#065f46', borderRadius: 99, padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}>
-                  {donorNotifications.length} {t(lang, 'total', 'کل')}
-                </span>
               </div>
               <button
                 className="btn btn-outline"
@@ -1702,285 +2034,428 @@ const ContributorPortal = () => {
               </button>
             </div>
             <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
-              {t(lang, 'Track the acceptance and fulfillment status of your matched donations.', 'اپنے مماثل عطیات کی قبولیت اور تکمیل کی حیثیت کو ٹریک کریں۔')}
+              {t(lang, 'Track your matched donation statuses and coordinator messages.', 'اپنے مماثل عطیات اور رابطہ کار کے پیغامات کو ٹریک کریں۔')}
             </p>
 
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+            {/* Sub-tabs to filter Donation updates vs Messages */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '6px', borderRadius: '12px', width: 'fit-content' }}>
               <button
                 style={{
-                  background: notifFilter === 'pending' ? '#10b981' : 'transparent',
-                  color: notifFilter === 'pending' ? 'white' : '#64748b',
+                  background: notifTypeFilter === 'donations' ? 'var(--primary)' : 'transparent',
+                  color: 'white',
                   border: 'none',
-                  padding: '8px 16px',
+                  padding: '8px 20px',
                   borderRadius: '8px',
                   fontWeight: 600,
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
                   transition: 'all 0.2s'
                 }}
-                onClick={() => setNotifFilter('pending')}
+                onClick={() => setNotifTypeFilter('donations')}
               >
-                {t(lang, 'Pending Review', 'زیر جائزہ')}
+                <Package size={16} />
+                {t(lang, 'Donation Activity', 'عطیات کی سرگرمی')}
+                {donorNotifications.filter(n => n.status === 'accepted' || n.status === 'rejected').length > 0 && (
+                  <span style={{ background: '#ef4444', color: 'white', borderRadius: 99, padding: '1px 6px', fontSize: '0.65rem' }}>
+                    {donorNotifications.filter(n => n.status === 'accepted' || n.status === 'rejected').length}
+                  </span>
+                )}
               </button>
               <button
                 style={{
-                  background: notifFilter === 'fulfilled' ? '#3b82f6' : 'transparent',
-                  color: notifFilter === 'fulfilled' ? 'white' : '#64748b',
+                  background: notifTypeFilter === 'messages' ? 'var(--primary)' : 'transparent',
+                  color: 'white',
                   border: 'none',
-                  padding: '8px 16px',
+                  padding: '8px 20px',
                   borderRadius: '8px',
                   fontWeight: 600,
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
                   transition: 'all 0.2s'
                 }}
-                onClick={() => setNotifFilter('fulfilled')}
+                onClick={() => setNotifTypeFilter('messages')}
               >
-                {t(lang, 'Fulfilled / Resolved', 'تکمیل شدہ')}
+                <MessageSquare size={16} />
+                {t(lang, 'Coordination Chats', 'رابطہ پیغامات')}
+                 {recentChatMessages.filter(msg => (msg.senderId?._id || msg.senderId) !== (user?.id || user?._id) && !readMessageIds.includes(msg._id)).length > 0 && (
+                  <span style={{ background: '#ef4444', color: 'white', borderRadius: 99, padding: '1px 6px', fontSize: '0.65rem' }}>
+                    {recentChatMessages.filter(msg => (msg.senderId?._id || msg.senderId) !== (user?.id || user?._id) && !readMessageIds.includes(msg._id)).length}
+                  </span>
+                )}
               </button>
             </div>
 
-            {(() => {
-              const filteredNotifs = donorNotifications.filter(notif => {
-                if (notifFilter === 'fulfilled') {
-                  return notif.status === 'accepted' || notif.status === 'completed' || notif.status === 'rejected';
-                }
-                return notif.status === 'pending';
-              });
+            {notifTypeFilter === 'donations' && (
+              <>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+                  <button
+                    style={{
+                      background: notifFilter === 'pending' ? '#10b981' : 'transparent',
+                      color: notifFilter === 'pending' ? 'white' : '#64748b',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onClick={() => setNotifFilter('pending')}
+                  >
+                    {t(lang, 'Pending Review', 'زیر جائزہ')}
+                  </button>
+                  <button
+                    style={{
+                      background: notifFilter === 'fulfilled' ? '#3b82f6' : 'transparent',
+                      color: notifFilter === 'fulfilled' ? 'white' : '#64748b',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onClick={() => setNotifFilter('fulfilled')}
+                  >
+                    {t(lang, 'Fulfilled / Resolved', 'تکمیل شدہ')}
+                  </button>
+                </div>
 
-              if (filteredNotifs.length === 0) {
-                return (
-                  <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
-                    <Bell size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
-                    <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>
-                      {notifFilter === 'pending' ? t(lang, 'No Pending Notifications', 'کوئی زیر التوا اطلاع نہیں ہے') : t(lang, 'No Fulfilled Notifications', 'کوئی مکمل شدہ اطلاع نہیں ہے')}
-                    </h3>
-                    <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t(lang, 'Your status updates will appear here.', 'آپ کے عطیہ کی حیثیت کی اپ ڈیٹس یہاں ظاہر ہوں گی۔')}</p>
-                  </div>
-                );
-              }
-
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {filteredNotifs.map(notif => {
-                    const isAccepted = notif.status === 'accepted';
-                    const isRejected = notif.status === 'rejected';
-                    const isPending = notif.status === 'pending';
-                    const isCompleted = notif.status === 'completed';
-
-                    // Styles depending on status
-                    let borderLeftColor = '#64748b';
-                    let statusBg = '#f1f5f9';
-                    let statusColor = '#475569';
-                    let statusLabel = t(lang, 'Notification', 'اطلاع');
-
-                    if (isAccepted) {
-                      borderLeftColor = '#10b981';
-                      statusBg = '#e0f2fe';
-                      statusColor = '#0369a1';
-                      statusLabel = t(lang, 'Fulfillment Accepted', 'قبول کر لیا گیا');
-                    } else if (isRejected) {
-                      borderLeftColor = '#ef4444';
-                      statusBg = '#fee2e2';
-                      statusColor = '#991b1b';
-                      statusLabel = t(lang, 'Fulfillment Declined', 'مسترد کر دیا گیا');
-                    } else if (isPending) {
-                      borderLeftColor = '#f59e0b';
-                      statusBg = '#fef9c3';
-                      statusColor = '#713f12';
-                      statusLabel = t(lang, 'Pending Review', 'زیر التوا');
-                    } else if (isCompleted) {
-                      borderLeftColor = '#3b82f6';
-                      statusBg = '#dcfce3';
-                      statusColor = '#166534';
-                      statusLabel = t(lang, 'Fulfillment Completed', 'تکمیل شدہ');
+                {(() => {
+                  const filteredNotifs = donorNotifications.filter(notif => {
+                    if (notifFilter === 'fulfilled') {
+                      return notif.status === 'accepted' || notif.status === 'completed' || notif.status === 'rejected';
                     }
+                    return notif.status === 'pending';
+                  });
+
+                  if (filteredNotifs.length === 0) {
+                    return (
+                      <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                        <Bell size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                        <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>
+                          {notifFilter === 'pending' ? t(lang, 'No Pending Notifications', 'کوئی زیر التوا اطلاع نہیں ہے') : t(lang, 'No Fulfilled Notifications', 'کوئی مکمل شدہ اطلاع نہیں ہے')}
+                        </h3>
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t(lang, 'Your status updates will appear here.', 'آپ کے عطیہ کی حیثیت کی اپ ڈیٹس یہاں ظاہر ہوں گی۔')}</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {filteredNotifs.map(notif => {
+                        const isAccepted = notif.status === 'accepted';
+                        const isRejected = notif.status === 'rejected';
+                        const isPending = notif.status === 'pending';
+                        const isCompleted = notif.status === 'completed';
+
+                        let borderLeftColor = '#64748b';
+                        let statusBg = '#f1f5f9';
+                        let statusColor = '#475569';
+                        let statusLabel = t(lang, 'Notification', 'اطلاع');
+
+                        if (isAccepted) {
+                          borderLeftColor = '#10b981';
+                          statusBg = '#e0f2fe';
+                          statusColor = '#0369a1';
+                          statusLabel = t(lang, 'Fulfillment Accepted', 'قبول کر لیا گیا');
+                        } else if (isRejected) {
+                          borderLeftColor = '#ef4444';
+                          statusBg = '#fee2e2';
+                          statusColor = '#991b1b';
+                          statusLabel = t(lang, 'Fulfillment Declined', 'مسترد کر دیا گیا');
+                        } else if (isPending) {
+                          borderLeftColor = '#f59e0b';
+                          statusBg = '#fef9c3';
+                          statusColor = '#713f12';
+                          statusLabel = t(lang, 'Pending Review', 'زیر التوا');
+                        } else if (isCompleted) {
+                          borderLeftColor = '#3b82f6';
+                          statusBg = '#dcfce3';
+                          statusColor = '#166534';
+                          statusLabel = t(lang, 'Fulfillment Completed', 'تکمیل شدہ');
+                        }
+
+                        return (
+                          <div
+                            key={notif._id}
+                            style={{
+                              background: 'rgba(255,255,255,0.02)',
+                              borderRadius: '16px',
+                              border: '1px solid rgba(255,255,255,0.07)',
+                              borderLeft: `5px solid ${borderLeftColor}`,
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                              overflow: 'hidden',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                              <span style={{ background: statusBg, color: statusColor, padding: '2px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>
+                                {statusLabel}
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                                  {new Date(notif.updatedAt || notif.createdAt).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm("Are you sure you want to delete this notification?")) {
+                                      try {
+                                        await axios.delete(`${API}/api/notifications/${notif._id}`, {
+                                          headers: { 'x-auth-token': localStorage.getItem('token') }
+                                        });
+                                        fetchData();
+                                      } catch (err) {
+                                        console.error("Failed to delete notification:", err);
+                                        alert("Failed to delete notification.");
+                                      }
+                                    }
+                                  }}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background 0.2s'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  title="Delete Notification"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div style={{ padding: '1.25rem 1.5rem' }}>
+                              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1.2, minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
+                                    {notif.donationId?.title || t(lang, 'Donation Item', 'عطیہ کی چیز')}
+                                  </h4>
+                                  <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                                    {isAccepted && (
+                                      <>
+                                        🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> ({t(lang, notif.donationId?.category || '', notif.donationId?.category || '')}) {t(lang, 'has been accepted by', 'قبول کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Please coordinate with them for pickup using the contact details below.', 'برائے مہربانی نیچے دیئے گئے رابطے کی تفصیلات کا استعمال کرتے ہوئے پک اپ کے لیے ان سے رابطہ کریں۔')}
+                                      </>
+                                    )}
+                                    {isRejected && (
+                                      <>
+                                        ❌ {t(lang, 'Your matching request for', 'آپ کی عطیہ کی درخواست برائے')} <strong>{notif.donationId?.title}</strong> {t(lang, 'was declined by', 'مسترد کر دی گئی تھی بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'The donation has been returned to the pool and is now available for other organizations to match.', 'عطیہ کو دوبارہ پول میں واپس کر دیا گیا ہے اور اب یہ دیگر تنظیموں کے لیے دستیاب ہے۔')}
+                                      </>
+                                    )}
+                                    {isPending && (
+                                      <>
+                                        ⏳ {t(lang, 'Your matched donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'is currently pending review by', 'زیر جائزہ ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>.
+                                      </>
+                                    )}
+                                    {isCompleted && (
+                                      <>
+                                        🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'has been successfully completed by', 'کامیابی کے ساتھ مکمل کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Thank you for your generous contribution!', 'آپ کے سخاوت مندانہ تعاون کا شکریہ!')}
+                                      </>
+                                    )}
+                                    {!isAccepted && !isRejected && !isPending && !isCompleted && notif.message}
+                                  </p>
+                                </div>
+
+                                {notif.receiverId && (isAccepted || isCompleted || isPending) && (
+                                  <div
+                                    style={{
+                                      flex: 1,
+                                      minWidth: '280px',
+                                      background: 'rgba(16, 185, 129, 0.04)',
+                                      border: '1px solid rgba(16, 185, 129, 0.15)',
+                                      borderRadius: '12px',
+                                      padding: '1.25rem',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.01)'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                      <Building2 size={16} color="#10b981" />
+                                      <strong style={{ color: '#34d399', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        {t(lang, 'Receiver Profile Details', 'وصول کنندہ کے پروفائل کی تفصیلات')}
+                                      </strong>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #064e3b, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                                        {notif.receiverId.profilePic ? (
+                                          <img src={notif.receiverId.profilePic} alt="Receiver" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                          <Building2 size={22} color="white" />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div style={{ fontWeight: 800, color: '#f1f5f9', fontSize: '0.95rem' }}>{notif.receiverId.name}</div>
+                                        <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>📍 {notif.receiverId.city || 'Verified NGO'}</div>
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '0.85rem' }}>
+                                      <div>
+                                        <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                          {t(lang, 'Email Address', 'ای میل ایڈریس')}
+                                        </span>
+                                        <a href={`mailto:${notif.receiverId.email}`} style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
+                                          {notif.receiverId.email}
+                                        </a>
+                                      </div>
+                                      <div>
+                                        <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                          {t(lang, 'Contact Number', 'رابطہ نمبر')}
+                                        </span>
+                                        <a href={`tel:${notif.receiverId.phone}`} style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
+                                          {notif.receiverId.phone}
+                                        </a>
+                                      </div>
+
+                                      {notif.receiverId.location?.address && (
+                                        <div style={{ gridColumn: '1 / -1', borderTop: '1px solid rgba(16, 185, 129, 0.1)', paddingTop: '8px' }}>
+                                          <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
+                                            {t(lang, 'Street Address', 'گلی کا پتہ')}
+                                          </span>
+                                          <div style={{ color: '#f1f5f9', fontWeight: 600, marginBottom: '10px' }}>
+                                            {notif.receiverId.location.address}
+                                          </div>
+                                          {notif.receiverId.location.coordinates && (
+                                            <a
+                                              href={`https://www.google.com/maps/search/?api=1&query=${notif.receiverId.location.coordinates[1]},${notif.receiverId.location.coordinates[0]}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              style={{
+                                                background: '#10b981',
+                                                color: 'white',
+                                                textDecoration: 'none',
+                                                padding: '6px 12px',
+                                                borderRadius: '6px',
+                                                fontSize: '0.78rem',
+                                                fontWeight: 700,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: '0 2px 4px rgba(16,185,129,0.2)'
+                                              }}
+                                            >
+                                              <MapPin size={12} /> {t(lang, 'Open in Google Maps', 'گوگل میپس میں کھولیں')}
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+
+            {notifTypeFilter === 'messages' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {recentChatMessages.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <MessageSquare size={48} color="rgba(255,255,255,0.15)" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                    <h3 style={{ color: '#f1f5f9', marginBottom: '0.5rem' }}>
+                      {t(lang, 'No Messages Yet', 'ابھی تک کوئی پیغام نہیں ہے')}
+                    </h3>
+                    <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{t(lang, 'Coordination chats with receivers will appear here.', 'پیغامات یہاں ظاہر ہوں گے۔')}</p>
+                  </div>
+                ) : (
+                  recentChatMessages.map(msg => {
+                    const donationItem = msg.donationId;
+                    const donationTitle = donationItem?.title || 'Donated Item';
+                    const partner = (msg.senderId?._id || msg.senderId) === (user?.id || user?._id) ? msg.receiverId : msg.senderId;
+                    const partnerName = partner?.name || 'Verified Partner';
+                    const isMe = (msg.senderId?._id || msg.senderId) === (user?.id || user?._id);
+                    const isUnread = !isMe && !readMessageIds.includes(msg._id);
+                    const formattedTime = new Date(msg.createdAt).toLocaleString('en-PK', {
+                      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                    });
 
                     return (
                       <div
-                        key={notif._id}
+                        key={msg._id}
+                        onClick={() => {
+                          if (donationItem) {
+                            setActiveChatDonationId(donationItem._id || donationItem);
+                            setActiveChatDonation(donationItem);
+                            if (isUnread) {
+                              const updatedRead = [...readMessageIds, msg._id];
+                              setReadMessageIds(updatedRead);
+                              localStorage.setItem('readMessageIds', JSON.stringify(updatedRead));
+                            }
+                          }
+                        }}
                         style={{
-                          background: 'rgba(255,255,255,0.02)',
+                          background: isUnread ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                          border: isUnread ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
                           borderRadius: '16px',
-                          border: '1px solid rgba(255,255,255,0.07)',
-                          borderLeft: `5px solid ${borderLeftColor}`,
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                          overflow: 'hidden',
-                          transition: 'all 0.2s ease'
+                          padding: '1.25rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '1rem'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.borderColor = 'var(--primary)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.borderColor = isUnread ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.08)';
                         }}
                       >
-                        {/* Header bar */}
-                        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                          <span style={{ background: statusBg, color: statusColor, padding: '2px 10px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>
-                            {statusLabel}
-                          </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                              {new Date(notif.updatedAt || notif.createdAt).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (window.confirm("Are you sure you want to delete this notification?")) {
-                                  try {
-                                    await axios.delete(`${API}/api/notifications/${notif._id}`, {
-                                      headers: { 'x-auth-token': localStorage.getItem('token') }
-                                    });
-                                    fetchData(); // refresh notifications
-                                  } catch (err) {
-                                    console.error("Failed to delete notification:", err);
-                                    alert("Failed to delete notification.");
-                                  }
-                                }
-                              }}
-                              style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#ef4444',
-                                cursor: 'pointer',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'background 0.2s'
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                              title="Delete Notification"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                          <div style={{
+                            width: '48px', height: '48px', borderRadius: '50%',
+                            background: isUnread ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: isUnread ? '#10b981' : '#94a3b8'
+                          }}>
+                            <MessageSquare size={24} />
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <span style={{ fontWeight: 700, color: 'white' }}>{partnerName}</span>
+                              <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: '12px', color: '#94a3b8' }}>
+                                {donationTitle}
+                              </span>
+                              {isUnread && (
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
+                              )}
+                            </div>
+                            <p style={{ color: '#cbd5e1', margin: 0, fontSize: '0.9rem', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {isMe ? `${t(lang, 'You: ', 'آپ: ')}` : ''}{msg.text}
+                            </p>
                           </div>
                         </div>
-
-                        {/* Content */}
-                        <div style={{ padding: '1.25rem 1.5rem' }}>
-                          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'stretch', flexWrap: 'wrap' }}>
-                            {/* Left Column: Donation Details */}
-                            <div style={{ flex: 1.2, minWidth: '280px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
-                                {notif.donationId?.title || t(lang, 'Donation Item', 'عطیہ کی چیز')}
-                              </h4>
-                              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                                {isAccepted && (
-                                  <>
-                                    🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> ({t(lang, notif.donationId?.category || '', notif.donationId?.category || '')}) {t(lang, 'has been accepted by', 'قبول کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Please coordinate with them for pickup using the contact details below.', 'برائے مہربانی نیچے دیئے گئے رابطے کی تفصیلات کا استعمال کرتے ہوئے پک اپ کے لیے ان سے رابطہ کریں۔')}
-                                  </>
-                                )}
-                                {isRejected && (
-                                  <>
-                                    ❌ {t(lang, 'Your matching request for', 'آپ کی عطیہ کی درخواست برائے')} <strong>{notif.donationId?.title}</strong> {t(lang, 'was declined by', 'مسترد کر دی گئی تھی بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'The donation has been returned to the pool and is now available for other organizations to match.', 'عطیہ کو دوبارہ پول میں واپس کر دیا گیا ہے اور اب یہ دیگر تنظیموں کے لیے دستیاب ہے۔')}
-                                  </>
-                                )}
-                                {isPending && (
-                                  <>
-                                    ⏳ {t(lang, 'Your matched donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'is currently pending review by', 'زیر جائزہ ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>.
-                                  </>
-                                )}
-                                {isCompleted && (
-                                  <>
-                                    🎉 {t(lang, 'Your donation of', 'آپ کا عطیہ')} <strong>{notif.donationId?.title}</strong> {t(lang, 'has been successfully completed by', 'کامیابی کے ساتھ مکمل کر لیا گیا ہے بذریعہ')} <strong>{notif.receiverId?.name}</strong>. {t(lang, 'Thank you for your generous contribution!', 'آپ کے سخاوت مندانہ تعاون کا شکریہ!')}
-                                  </>
-                                )}
-                                {!isAccepted && !isRejected && !isPending && !isCompleted && notif.message}
-                              </p>
-                            </div>
-
-                            {/* Right Column: Receiver Profile Card */}
-                            {notif.receiverId && (isAccepted || isCompleted || isPending) && (
-                              <div
-                                style={{
-                                  flex: 1,
-                                  minWidth: '280px',
-                                  background: 'rgba(16, 185, 129, 0.04)',
-                                  border: '1px solid rgba(16, 185, 129, 0.15)',
-                                  borderRadius: '12px',
-                                  padding: '1.25rem',
-                                  boxShadow: '0 2px 8px rgba(0,0,0,0.01)'
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                                  <Building2 size={16} color="#10b981" />
-                                  <strong style={{ color: '#34d399', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                    {t(lang, 'Receiver Profile Details', 'وصول کنندہ کے پروفائل کی تفصیلات')}
-                                  </strong>
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #064e3b, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                                    {notif.receiverId.profilePic ? (
-                                      <img src={notif.receiverId.profilePic} alt="Receiver" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    ) : (
-                                      <Building2 size={22} color="white" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <div style={{ fontWeight: 800, color: '#f1f5f9', fontSize: '0.95rem' }}>{notif.receiverId.name}</div>
-                                    <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>📍 {notif.receiverId.city || 'Verified NGO'}</div>
-                                  </div>
-                                </div>
-
-                                {/* Contact Details Grid */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '0.85rem' }}>
-                                  <div>
-                                    <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
-                                      {t(lang, 'Email Address', 'ای میل ایڈریس')}
-                                    </span>
-                                    <a href={`mailto:${notif.receiverId.email}`} style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
-                                      {notif.receiverId.email}
-                                    </a>
-                                  </div>
-                                  <div>
-                                    <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
-                                      {t(lang, 'Contact Number', 'رابطہ نمبر')}
-                                    </span>
-                                    <a href={`tel:${notif.receiverId.phone}`} style={{ color: '#10b981', fontWeight: 600, textDecoration: 'none' }}>
-                                      {notif.receiverId.phone}
-                                    </a>
-                                  </div>
-
-                                  {notif.receiverId.location?.address && (
-                                    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid rgba(16, 185, 129, 0.1)', paddingTop: '8px' }}>
-                                      <span style={{ color: '#cbd5e1', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>
-                                        {t(lang, 'Street Address', 'گلی کا پتہ')}
-                                      </span>
-                                      <div style={{ color: '#f1f5f9', fontWeight: 600, marginBottom: '10px' }}>
-                                        {notif.receiverId.location.address}
-                                      </div>
-                                      {notif.receiverId.location.coordinates && (
-                                        <a
-                                          href={`https://www.google.com/maps/search/?api=1&query=${notif.receiverId.location.coordinates[1]},${notif.receiverId.location.coordinates[0]}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          style={{
-                                            background: '#10b981',
-                                            color: 'white',
-                                            textDecoration: 'none',
-                                            padding: '6px 12px',
-                                            borderRadius: '6px',
-                                            fontSize: '0.78rem',
-                                            fontWeight: 700,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            boxShadow: '0 2px 4px rgba(16,185,129,0.2)'
-                                          }}
-                                        >
-                                          <MapPin size={12} /> {t(lang, 'Open in Google Maps', 'گوگل میپس میں کھولیں')}
-                                        </a>
-                                      )}
-                                    </div>
-                                  )}
-                              </div>
-                            </div>
-                          )}
+                        <div style={{ textAlign: 'right', fontSize: '0.8rem', color: '#64748b' }}>
+                          <div>{formattedTime}</div>
+                          <div style={{ color: '#10b981', marginTop: '4px', fontWeight: 600 }}>
+                            {t(lang, 'Click to Reply', 'جواب دینے کے لیے کلک کریں')} →
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
-            );
-          })()}
+            )}
           </div>
         )}
 
@@ -2239,19 +2714,48 @@ const ContributorPortal = () => {
       )}
 
       {selectedHistoryDonation && (
-        <div className="modal-overlay" onClick={() => setSelectedHistoryDonation(null)} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
+        <div className="modal-overlay" onClick={() => { setSelectedHistoryDonation(null); setActiveHistoryImgIdx(0); }} style={{ backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
           <div className="modal-content post-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflowY: 'auto', maxHeight: '85vh', background: 'rgba(10, 18, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', color: 'white' }}>
-            <div style={{ position: 'relative', height: 220, overflow: 'hidden' }}>
+            <div style={{ position: 'relative', height: 260, overflow: 'hidden', background: '#070f1e' }}>
               {selectedHistoryDonation.imageUrl ? (
-                <img src={selectedHistoryDonation.imageUrl} alt="Donation" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                   {(() => {
+                    const imgs = Array.isArray(selectedHistoryDonation.imageUrl) 
+                      ? selectedHistoryDonation.imageUrl 
+                      : [selectedHistoryDonation.imageUrl];
+                    const activeImg = imgs[activeHistoryImgIdx] || imgs[0];
+                    return (
+                      <>
+                        <img src={activeImg} alt="Donation" style={{ width: '100%', height: imgs.length > 1 ? '190px' : '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+                        {imgs.length > 1 && (
+                          <div style={{ display: 'flex', gap: '8px', padding: '6px', overflowX: 'auto', background: 'rgba(0,0,0,0.4)', height: '70px', justifyContent: 'center', alignItems: 'center' }}>
+                            {imgs.map((im, idx) => (
+                              <img
+                                key={idx}
+                                src={im}
+                                alt="Thumbnail"
+                                onClick={() => setActiveHistoryImgIdx(idx)}
+                                style={{
+                                  width: '45px', height: '45px', objectFit: 'cover', borderRadius: '6px',
+                                  border: activeHistoryImgIdx === idx ? '2px solid #10b981' : '2px solid rgba(255,255,255,0.1)',
+                                  cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
               ) : (
                 <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0f172a, #1e293b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Package size={56} color="#475569" />
                 </div>
               )}
               {/* Glowing overlay shadow on header image */}
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(10,18,36,0.95) 100%)' }} />
-              <button className="close-modal" onClick={() => setSelectedHistoryDonation(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.85)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.6)'}><X size={16} /></button>
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(10,18,36,0.95) 100%)', pointerEvents: 'none' }} />
+              <button className="close-modal" onClick={() => { setSelectedHistoryDonation(null); setActiveHistoryImgIdx(0); }} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', zIndex: 10 }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.85)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.6)'}><X size={16} /></button>
             </div>
 
             <div style={{ padding: '1.75rem', marginTop: '-20px', position: 'relative', zIndex: 2 }}>
@@ -2332,6 +2836,47 @@ const ContributorPortal = () => {
                   )}
                 </div>
               )}
+
+              {/* Coordination Live Chat System Toggle */}
+              {(selectedHistoryDonation.status === 'completed' || selectedHistoryDonation.receiverId) && (
+                <div style={{ 
+                  marginTop: '1.25rem', 
+                  background: 'rgba(16, 185, 129, 0.03)', 
+                  border: '1px solid rgba(16, 185, 129, 0.15)', 
+                  borderRadius: '16px', 
+                  padding: '1.25rem',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>💬</span>
+                    <strong style={{ color: '#34d399', fontSize: '0.9rem', fontWeight: 800 }}>Coordination Chat</strong>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      if (activeChatDonationId === selectedHistoryDonation._id) {
+                        setActiveChatDonationId(null);
+                        setActiveChatDonation(null);
+                      } else {
+                        setActiveChatDonationId(selectedHistoryDonation._id);
+                        setActiveChatDonation(selectedHistoryDonation);
+                      }
+                    }}
+                    className="btn"
+                    style={{
+                      padding: '8px 16px', fontSize: '0.82rem', borderRadius: '10px',
+                      background: activeChatDonationId === selectedHistoryDonation._id ? 'rgba(239,68,68,0.15)' : '#10b981',
+                      color: activeChatDonationId === selectedHistoryDonation._id ? '#fca5a5' : 'white',
+                      border: 'none', cursor: 'pointer', fontWeight: 700
+                    }}
+                  >
+                    {activeChatDonationId === selectedHistoryDonation._id ? 'Close Chat Drawer' : 'Open Chat Panel'}
+                  </button>
+                </div>
+              )}
+
               {/* Trust Metrics Rating */}
               {selectedHistoryDonation.status === 'completed' && (
                 <div style={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '16px', padding: '1.25rem', marginTop: '1.25rem' }}>
@@ -2416,12 +2961,231 @@ const ContributorPortal = () => {
         </div>
       )}
 
-      {isImageZoomed && file?.preview && (
+      {isImageZoomed && files[0]?.preview && (
         <div className="modal-overlay" onClick={() => setIsImageZoomed(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(3, 7, 18, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <button onClick={() => setIsImageZoomed(false)} style={{ position: 'absolute', top: 24, right: 24, color: 'white', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-          <img src={file.preview} alt="Zoomed View" style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '16px' }} onClick={e => e.stopPropagation()} />
+          <img src={files[0].preview} alt="Zoomed View" style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '16px' }} onClick={e => e.stopPropagation()} />
         </div>
       )}
+
+      {/* Sliding Floating Coordination Chat Drawer */}
+      {activeChatDonationId && (() => {
+        const donationItem = activeChatDonation || myDonations.find(d => d._id === activeChatDonationId) || selectedHistoryDonation;
+        if (!donationItem) return null;
+
+        const partnerName = donationItem.receiverId?.name || donationItem.receiverDetails?.name || 'Verified Partner';
+        const partnerPic = donationItem.receiverId?.profilePic;
+
+        return (
+          <div className="chat-drawer-container" style={{
+            position: 'fixed',
+            bottom: chatPosition ? undefined : '20px',
+            right: chatPosition ? undefined : '20px',
+            left: chatPosition ? `${chatPosition.x}px` : undefined,
+            top: chatPosition ? `${chatPosition.y}px` : undefined,
+            width: '380px',
+            height: isChatMinimized ? '60px' : '480px',
+            background: 'rgba(10, 18, 36, 0.95)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '24px',
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.1)',
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            backdropFilter: 'blur(16px)',
+            transition: chatPosition ? 'none' : 'height 0.3s ease-in-out, width 0.3s ease-in-out'
+          }}>
+            {/* Header with Drag Handler */}
+            <div 
+              onMouseDown={handleChatDragStart}
+              style={{
+                padding: '12px 18px',
+                background: 'linear-gradient(90deg, rgba(6, 78, 59, 0.8) 0%, rgba(4, 120, 87, 0.8) 100%)',
+                borderBottom: '1px solid rgba(16, 185, 129, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'move',
+                userSelect: 'none'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '50%', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #10b981' }}>
+                  {partnerPic ? (
+                    <img src={partnerPic} alt={partnerName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '1rem' }}>🏢</span>
+                  )}
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'white', fontWeight: 800 }}>{partnerName}</h4>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></span>
+                    Online Coordination
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onMouseDown={e => e.stopPropagation()}>
+                <button
+                  onClick={() => setIsChatMinimized(!isChatMinimized)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: 'white',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    width: '28px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontSize: '0.8rem'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                >
+                  {isChatMinimized ? '🗖' : '➖'}
+                </button>
+                <button 
+                  onClick={() => { setActiveChatDonationId(null); setActiveChatDonation(null); }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: 'white',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    width: '28px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontSize: '0.8rem'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {!isChatMinimized && (
+              <>
+                {/* Donation Item Context Card */}
+                <div style={{
+                  padding: '8px 16px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  fontSize: '0.75rem',
+                  color: '#94a3b8',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span>Regarding: <strong>{donationItem.title}</strong></span>
+                  <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7', padding: '2px 8px', borderRadius: '8px', fontSize: '0.65rem', fontWeight: 700 }}>
+                    {donationItem.category || 'General'}
+                  </span>
+                </div>
+
+                {/* Messages List */}
+                <div className="chat-messages-list" style={{
+                  flex: 1,
+                  padding: '16px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  background: '#070d19'
+                }}>
+                  {chatMessages.length === 0 ? (
+                    <div style={{ color: '#64748b', fontSize: '0.8rem', textAlign: 'center', margin: 'auto', padding: '0 20px', lineHeight: 1.5 }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '8px' }}>💬</div>
+                      Coordinate pickup locations, timings, and delivery guidelines directly with your partner here.
+                    </div>
+                  ) : (
+                    chatMessages.map(msg => {
+                      const isMe = (msg.senderId?._id || msg.senderId) === (user?.id || user?._id);
+                      return (
+                        <div key={msg._id} style={{ display: 'flex', flexDirection: 'column', alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                          <div style={{ 
+                            padding: '10px 14px',
+                            borderRadius: isMe ? '18px 18px 2px 18px' : '18px 18px 18px 2px',
+                            fontSize: '0.82rem',
+                            lineHeight: 1.45,
+                            background: isMe ? 'linear-gradient(135deg, #065f46 0%, #047857 100%)' : 'rgba(255,255,255,0.06)',
+                            color: 'white',
+                            border: `1px solid ${isMe ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)'}`,
+                            boxShadow: isMe ? '0 4px 12px rgba(16, 185, 129, 0.15)' : 'none'
+                          }}>
+                            {msg.text}
+                          </div>
+                          <span style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '3px', alignSelf: isMe ? 'flex-end' : 'flex-start', padding: '0 4px' }}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={sendChatMessage} style={{
+                  display: 'flex',
+                  borderTop: '1px solid rgba(255,255,255,0.08)',
+                  padding: '10px',
+                  background: '#0a1224',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <input
+                    type="text"
+                    value={chatText}
+                    onChange={e => setChatText(e.target.value)}
+                    placeholder="Type coordination message..."
+                    style={{
+                      flex: 1,
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '12px',
+                      color: 'white',
+                      fontSize: '0.82rem',
+                      padding: '10px 14px',
+                      outline: 'none'
+                    }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={isSendingChat || !chatText.trim()}
+                    style={{
+                      background: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      width: '40px',
+                      height: '40px',
+                      cursor: !chatText.trim() ? 'not-allowed' : 'pointer',
+                      fontSize: '0.9rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
+                      transition: 'all 0.2s',
+                      flexShrink: 0
+                    }}
+                  >
+                    ➔
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
     </div>
   );

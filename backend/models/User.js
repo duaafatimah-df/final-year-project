@@ -8,6 +8,8 @@ const UserSchema = new mongoose.Schema({
   role:     { type: String, enum: ['donor', 'receiver', 'admin'], required: true },
   taxId:    { type: String },
   orgType:  { type: String, enum: ['NGO', 'Foundation', 'Instagram Page', 'Community Group'] },
+  regAuthority: { type: String },
+  estYear:  { type: String },
 
   // Verification & trust
   isVerified:  { type: Boolean, default: false },

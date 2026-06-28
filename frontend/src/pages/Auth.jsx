@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Building2, User, Mail, Lock, FileText, ArrowRight, Eye, EyeOff, Phone, ShieldCheck, KeyRound } from 'lucide-react';
@@ -19,6 +19,10 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [orgType, setOrgType] = useState('NGO');
   const [error, setError] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [regAuthority, setRegAuthority] = useState('');
+  const [estYear, setEstYear] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [forgotMode, setForgotMode] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [customAlert, setCustomAlert] = useState(null);
@@ -30,6 +34,12 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
 
   const { login, register, verifyEmail, forgotPassword, resetPassword, resendOtp } = useAuth();
+
+  useEffect(() => {
+    setFieldErrors({});
+    setError('');
+    setSuccessMsg('');
+  }, [isLogin, forgotMode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,19 +121,85 @@ const Auth = () => {
           }
         }
       } else {
+        const errors = {};
+        
+        // Name Validation
+        const nameRegex = /^[a-zA-Z\s]{3,}$/;
+        const finalName = name;
+        if (!finalName) {
+          errors.name = 'Full Name / Organization Name is required.';
+        } else if (!nameRegex.test(finalName)) {
+          errors.name = 'Name must contain only alphabetic characters and spaces, and be at least 3 characters long.';
+        }
+
+        // Pakistani Phone Validation
+        const pkPhoneRegex = /^((\+92)|(0092)|0)?(3\d{9})$/;
         if (!phone) {
-          setError('Phone number is required.');
+          errors.phone = 'Phone number is required.';
+        } else if (!pkPhoneRegex.test(phone.replace(/[\s-]/g, ''))) {
+          errors.phone = 'Please enter a valid Pakistani mobile number (e.g., 03001234567).';
+        }
+
+        // Email Domain & Format Validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const validateEmailDomain = (emailVal) => {
+          const parts = emailVal.split('@');
+          if (parts.length !== 2) return false;
+          const domain = parts[1].toLowerCase();
+          const allowedPublicDomains = [
+            'gmail.com', 'yahoo.com', 'ymail.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+            'live.com', 'yandex.com', 'protonmail.com', 'zoho.com',
+            'gmx.com', 'aol.com', 'proton.me', 'mail.ru'
+          ];
+          return allowedPublicDomains.includes(domain);
+        };
+        if (!email) {
+          errors.email = 'Email address is required.';
+        } else if (!emailRegex.test(email) || !validateEmailDomain(email)) {
+          errors.email = 'Please provide a valid email address using a real provider (e.g., Gmail, Yahoo) or verified organization domain.';
+        }
+
+        // Password Validation
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        if (!password) {
+          errors.password = 'Password is required.';
+        } else if (!passwordRegex.test(password)) {
+          errors.password = 'Password must be at least 8 characters long, and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).';
+        }
+
+        // Receiver/NGO Specific Validation
+        if (type === 'receiver') {
+          if (!taxId || taxId.trim().length < 5) {
+            errors.taxId = 'NGO Registration/License Number is required (min 5 characters).';
+          }
+          if (!regAuthority || regAuthority.trim().length < 3) {
+            errors.regAuthority = 'Registration Authority is required (e.g. PCP, SECP).';
+          }
+          const currentYear = new Date().getFullYear();
+          const yearNum = parseInt(estYear, 10);
+          if (!estYear || !/^\d{4}$/.test(estYear) || yearNum < 1800 || yearNum > currentYear) {
+            errors.estYear = `Valid 4-digit Establishment Year between 1800 and ${currentYear} is required.`;
+          }
+        }
+
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(errors);
           setLoading(false);
           return;
         }
+
+        setFieldErrors({});
+
         const userData = {
           email,
           password,
           phone: phone,
           role: type,
-          name: name || (type === 'donor' ? 'New Donor' : 'New NGO'),
-          taxId: type === 'receiver' ? '123456' : undefined,
-          orgType: type === 'receiver' ? orgType : undefined
+          name: finalName,
+          taxId: type === 'receiver' ? taxId : undefined,
+          orgType: type === 'receiver' ? orgType : undefined,
+          regAuthority: type === 'receiver' ? regAuthority : undefined,
+          estYear: type === 'receiver' ? estYear : undefined
         };
 
         const res = await register(userData);
@@ -288,6 +364,7 @@ const Auth = () => {
                     className="input-field with-icon"
                   />
                 </div>
+                {fieldErrors.name && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.name}</span>}
               </div>
             )}
 
@@ -311,11 +388,50 @@ const Auth = () => {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Registration / Tax ID (Optional)</label>
+                  <label>NGO Registration / License Number *</label>
                   <div className="input-icon-wrapper">
                     <FileText className="input-icon" size={18} />
-                    <input type="text" placeholder="Registration # if applicable" className="input-field with-icon" />
+                    <input
+                      type="text"
+                      value={taxId}
+                      onChange={(e) => setTaxId(e.target.value)}
+                      placeholder="e.g. NGO-12345-KAR"
+                      required
+                      className="input-field with-icon"
+                    />
                   </div>
+                  {fieldErrors.taxId && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.taxId}</span>}
+                </div>
+                <div className="form-group">
+                  <label>Registration Authority *</label>
+                  <div className="input-icon-wrapper">
+                    <Building2 className="input-icon" size={18} />
+                    <input
+                      type="text"
+                      value={regAuthority}
+                      onChange={(e) => setRegAuthority(e.target.value)}
+                      placeholder="e.g. Social Welfare Dept, SECP, PCP"
+                      required
+                      className="input-field with-icon"
+                    />
+                  </div>
+                  {fieldErrors.regAuthority && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.regAuthority}</span>}
+                </div>
+                <div className="form-group">
+                  <label>Establishment Year *</label>
+                  <div className="input-icon-wrapper">
+                    <FileText className="input-icon" size={18} />
+                    <input
+                      type="text"
+                      value={estYear}
+                      onChange={(e) => setEstYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="e.g. 2015"
+                      required
+                      maxLength={4}
+                      className="input-field with-icon"
+                    />
+                  </div>
+                  {fieldErrors.estYear && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.estYear}</span>}
                 </div>
               </>
             )}
@@ -334,6 +450,7 @@ const Auth = () => {
                     className="input-field with-icon"
                   />
                 </div>
+                {fieldErrors.phone && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.phone}</span>}
               </div>
             )}
 
@@ -352,6 +469,7 @@ const Auth = () => {
                     className="input-field with-icon"
                   />
                 </div>
+                 {!isLogin && fieldErrors.email && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.email}</span>}
               </div>
             )}
 
@@ -377,6 +495,7 @@ const Auth = () => {
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                 {!isLogin && fieldErrors.password && <span className="field-error" style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>{fieldErrors.password}</span>}
               </div>
             )}
 

@@ -9,7 +9,7 @@ const DonationSchema = new mongoose.Schema({
   category: { type: String, enum: ['Food', 'Medicine', 'Clothes', 'Grocery', 'Household', 'Meat', 'Vegetables', 'Fruit', 'Dairy', 'Other'], required: true },
   itemType: { type: String, required: true },
   condition: { type: String, enum: ['New', 'Good', 'Used'] },
-  imageUrl: { type: String, required: true },
+  imageUrl: { type: mongoose.Schema.Types.Mixed, required: true },
   quantity: { type: String, default: '' },
   description: { type: String, default: '' },
 

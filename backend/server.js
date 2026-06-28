@@ -17,10 +17,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ─── MongoDB Connection ──────────────────────────────────────────────────────
-console.log('🔄 Connecting to MongoDB Atlas...');
+const isServerless = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+const mongoPoolSize = isServerless ? 1 : 10;
+
+console.log(`🔄 Connecting to MongoDB Atlas (Pool Size: ${mongoPoolSize})...`);
 mongoose.connect(process.env.MONGO_URI, {
-  maxPoolSize: 1, // Crucial for Vercel Serverless to prevent hitting MongoDB Atlas 100-connection limit (SSL alert 80)
-  minPoolSize: 1,
+  maxPoolSize: mongoPoolSize,
+  minPoolSize: mongoPoolSize === 1 ? 1 : 2,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000
 })
@@ -32,11 +35,24 @@ app.use(async (req, res, next) => {
   if (mongoose.connection.readyState === 1) {
     return next();
   }
+  
+  // If connection is in progress, wait for it instead of calling connect again
+  if (mongoose.connection.readyState === 2) {
+    console.log('🔌 MongoDB connection is in progress. Waiting for connection to establish...');
+    const checkState = setInterval(() => {
+      if (mongoose.connection.readyState === 1) {
+        clearInterval(checkState);
+        return next();
+      }
+    }, 100);
+    return;
+  }
+
   try {
     console.log(`🔌 MongoDB connection state is ${mongoose.connection.readyState}. Awaiting connection...`);
     await mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 1,
-      minPoolSize: 1,
+      maxPoolSize: mongoPoolSize,
+      minPoolSize: mongoPoolSize === 1 ? 1 : 2,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000
     });
@@ -58,6 +74,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/ratings', require('./routes/ratings'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/chats', require('./routes/chats'));
 
 // Health check
 app.get('/api/health', (req, res) => {
