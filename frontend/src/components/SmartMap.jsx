@@ -228,7 +228,29 @@ export default function SmartMap({ category, userLat, userLng, aiStatus, onSelec
 
           setMapLoaded(true);
         })
-        .catch(err => setMapError(err.message));
+        .catch(err => {
+          console.warn("Failed to load Google Maps script. Falling back to Leaflet.", err.message);
+          setUseLeaflet(true);
+          loadLeaflet()
+            .then(L => {
+              if (!mapRef.current) return;
+              if (leafletMapRef.current) {
+                leafletMapRef.current.remove();
+              }
+              mapRef.current.innerHTML = '';
+              const map = L.map(mapRef.current).setView([userLat, userLng], isRejected ? 14 : 12);
+              L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+              }).addTo(map);
+              leafletMapRef.current = map;
+              setMapLoaded(true);
+            })
+            .catch(leafletErr => {
+              setMapError('Failed to load map: ' + leafletErr.message);
+            });
+        });
     }
 
     return () => {

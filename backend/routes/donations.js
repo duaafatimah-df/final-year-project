@@ -122,6 +122,9 @@ router.post('/scan', authMiddleware, async (req, res) => {
     }
 
     const visualAi = await aiService.analyzeItem(imageUrl, category);
+    if (Array.isArray(imageUrl) && imageUrl.length > 1 && visualAi.safeImages && visualAi.safeImages.length === 0) {
+      return res.status(400).json({ error: `All items failed AI safety validation:\n${visualAi.reason}` });
+    }
     res.json(visualAi);
   } catch (err) {
     console.error('Scan Error:', err.message);
@@ -238,6 +241,7 @@ router.post('/', authMiddleware, async (req, res) => {
     let finalStatus = 'active';
     let donationKeywords = [];
     let finalCategory = cleanCategoryInput || 'Food';
+    let finalImageUrl = imageUrl;
 
     // If pre-analyzed AI parameters are passed, use them!
     if (preAiSafetyScore !== undefined) {
@@ -260,6 +264,16 @@ router.post('/', authMiddleware, async (req, res) => {
     } else {
       // Universal Image Analysis fallback if not pre-scanned
       const visualAi = await aiService.analyzeItem(imageUrl, cleanCategoryInput);
+      
+      // If we analyzed multiple images and all were rejected, return a bad request
+      if (Array.isArray(imageUrl) && imageUrl.length > 1 && visualAi.safeImages && visualAi.safeImages.length === 0) {
+        return res.status(400).json({ error: `All items failed AI safety validation:\n${visualAi.reason}` });
+      }
+
+      if (visualAi.safeImages && visualAi.safeImages.length > 0) {
+        finalImageUrl = visualAi.safeImages;
+      }
+
       aiSafetyScore = visualAi.safetyScore !== undefined ? visualAi.safetyScore : 60;
       isVerifiedSafe = visualAi.safetyScore >= 70;
       aiAnalysisReason += ` | AI Vision Analysis: ${visualAi.reason}`;
@@ -310,16 +324,19 @@ router.post('/', authMiddleware, async (req, res) => {
     // AI Integration 3: Medicine Validation
     if (finalCategory === 'Medicine') {
       try {
-        const ocr = await aiService.extractExpiry(imageUrl);
+        const ocr = await aiService.extractExpiry(finalImageUrl);
         if (ocr.isValid) {
           aiAnalysisReason += ` | OCR Found Expiry: ${ocr.expiryDate}`;
           if (ocr.mfgDate) {
             aiAnalysisReason += `, MFG: ${ocr.mfgDate}`;
           }
         } else {
-          // If it's a critical safety error, reject the donation
+          // If it's a critical safety error, reject the donation (only if we didn't already filter multiple images)
           if (ocr.message && (ocr.message.includes('expired') || ocr.message.includes('future') || ocr.message.includes('before the manufacturing'))) {
-            return res.status(400).json({ error: `Medicine Safety Validation failed: ${ocr.message}` });
+            // For multi-image check, we already filtered out expired items, so this should not hit unless all failed
+            if (!Array.isArray(imageUrl) || imageUrl.length === 1) {
+              return res.status(400).json({ error: `Medicine Safety Validation failed: ${ocr.message}` });
+            }
           }
           aiSafetyScore -= 20;
           aiAnalysisReason += ` | OCR Warning: ${ocr.message || 'No date found'}`;
@@ -339,7 +356,7 @@ router.post('/', authMiddleware, async (req, res) => {
       category: finalCategory,
       itemType: itemType || 'General',
       condition: condition || 'Good',
-      imageUrl: imageUrl || '',
+      imageUrl: finalImageUrl || '',
       quantity: quantity || '',
       description: description || '',
       expiryTime: expiryTime ? new Date(expiryTime) : null,

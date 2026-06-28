@@ -67,7 +67,7 @@ const aiService = {
   // 1. Item Image Analysis (Multimodal AI - Gemini Vision)
   analyzeItem: async (images, category) => {
     const imageList = Array.isArray(images) ? images : [images];
-    const imageBase64 = imageList[0] || '';
+    
     try {
       if (!process.env.GEMINI_API_KEY) {
         throw new Error('GEMINI_API_KEY is not set in .env');
@@ -75,173 +75,245 @@ const aiService = {
 
       const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
 
-      let prompt = '';
-      if (['Food', 'Meat', 'Vegetables', 'Fruit', 'Dairy'].includes(category)) {
-        prompt = `
-You are a strict food safety inspector.
+      const getPromptForIndex = (cat, idx, total) => {
+        const baseCategory = cleanToStandardCategory(cat);
+        const imageContext = total > 1 
+          ? `NOTE: You are analyzing Image ${idx + 1} of ${total} images uploaded. These images may represent multiple different items, or they may be different views/angles/labels of the SAME single item (e.g. front, back, side, close-up). Treat them as a cohesive unit if they show the same item.`
+          : '';
 
-Analyze this food image and decide clearly:
+        if (baseCategory === 'Food') {
+          return `
+You are a welcoming and helpful community donation assistant for SpareShare, a platform designed specifically to share homemade meals and food with those in need.
+Evaluate this image of food.
+${imageContext}
 
-- Fresh food → score 80–100
-- Spoiled food → score 0–40
-- Only use 50–69 if uncertain
+CRITICAL RULES FOR FOOD (MUST FOLLOW STRICTLY):
+1. We EXPLICITLY allow and highly encourage cooked meals, prepared food, and homemade dishes (such as Biryani, rice, pasta, curry, etc.) in unsealed containers, plastic food boxes, takeaway containers, plates, or standard packaging.
+2. DO NOT apply commercial packaging rules, tamper-evident seal rules, hygiene verification rules, or professional date/ingredient labeling rules to cooked food. The absence of commercial packaging or seals is normal and expected, and MUST NOT be used as a reason to reject the food.
+3. If the food looks fresh, clean, edible, and safe to consume (no mold, rot, or decay), you MUST set status to "approved" and safetyScore to 80-100.
+4. Reject food ONLY if it shows clear, visible signs of spoilage, rot, mold, decay, or being clearly stale/unsafe to consume.
 
-Classify the food item into one of these exact sub-categories: "Meat", "Vegetables", "Fruit", "Dairy", or "Food" (if it is a general cooked/prepared food item not falling into those specific sub-categories).
+Classify the food item into one of these exact sub-categories: "Meat", "Vegetables", "Fruit", "Dairy", or "Food".
 
-Respond ONLY in JSON:
-
+Respond ONLY in JSON format:
 {
   "status": "approved" | "needs_review" | "rejected",
-  "safetyScore": number,
-  "reason": "short reason",
+  "safetyScore": number (0-100),
+  "reason": "detailed explanation of freshness and safety, explicitly mentioning if it looks fresh and edible",
   "keywords": ["keyword1", "keyword2"],
-  "classifiedCategory": "Meat" | "Food" | "Vegetables" | "Fruit" | "Dairy" | "Other"
+  "classifiedCategory": "Food" | "Meat" | "Vegetables" | "Fruit" | "Dairy"
 }
 `;
-      } else if (category === 'Medicine') {
-        const currentDateStr = new Date().toISOString().split('T')[0];
-        prompt = `
-You are a pharmaceutical safety inspector.
+        } else if (baseCategory === 'Medicine') {
+          const currentDateStr = new Date().toISOString().split('T')[0];
+          return `
+You are a helpful pharmaceutical safety assistant.
+Evaluate this medicine image.
+${imageContext}
 
-Analyze the image and determine:
-1. Is this a valid medicine product?
-2. Check packaging condition (sealed/open/damaged).
-CRITICAL RULE: Do NOT reject a medicine for minor cosmetic outer packaging damage (like a slightly crushed, creased, or bent cardboard box corner) as long as the primary container (bottle, blister pack, tube, or vial) inside is intact, sealed, and undamaged.
-3. Detect expiry date and manufacturing date if visible.
-4. Identify medicine type (tablets, capsules, syrup, etc.)
-5. Evaluate if safe for donation (NOT food safety).
+CRITICAL RULES FOR MEDICINE:
+1. Check if it is a valid pharmaceutical product. Check package condition.
+2. Do NOT reject a medicine for minor cosmetic outer packaging damage (like a slightly crushed, creased, or bent cardboard box corner) as long as the primary container (bottle, blister pack, tube, or vial) inside is intact, sealed, and undamaged.
+3. For minor cosmetic outer box corner damage or crushed corners, set safetyScore to 75-90 (status: approved) instead of rejected. Only reject if the inner container/seal is actually broken or the item is expired.
+4. Detect expiry date and manufacturing date if visible.
+5. Evaluate safety.
 
-Return JSON:
+Respond ONLY in JSON format:
 {
-  "status": "valid" | "rejected" | "needs_review",
+  "status": "approved" | "needs_review" | "rejected",
   "safetyScore": number (0-100),
   "reason": "clear medical reasoning",
-  "keywords": ["capsules", "medicine", "tablets"],
+  "keywords": ["medicine", "tablet", "capsule"],
   "classifiedCategory": "Medicine"
 }
 
 IMPORTANT:
 - The actual current date is ${currentDateStr}. Use this date for any date comparisons.
 - Do NOT reject a medicine as "unverifiable" or "unsafe" due to its manufacturing date unless its manufacturing date is in the future (after ${currentDateStr}).
-- For minor cosmetic outer box corner damage or crushed corners, set status to "valid" or "needs_review" (with score 75-90) instead of "rejected". Only reject if the inner container/seal is actually broken or the item is expired.
-- DO NOT mention food
-- DO NOT compare with food
-- Treat this ONLY as medicine
 `;
-      } else {
-        prompt = `
-You are an item quality and safety inspector.
+        } else {
+          return `
+You are a welcoming and helpful community donation assistant for SpareShare, a platform designed specifically to share pre-loved items with those in need.
+Evaluate this image for donation.
+${imageContext}
 
-Look at this ${category || 'item'} image and evaluate its condition for donation.
+Classify the item into one of these categories: "Clothes", "Household", "Grocery", or "Other".
 
-Classify the item into one of these categories: "Clothes", "Household", "Grocery", "Medicine", "Food", or "Other" (if appropriate).
+CRITICAL RULES FOR ITEMS (Clothes, Household, Grocery, etc.):
+1. We EXPLICITLY allow and highly encourage used, pre-loved, or pre-used items.
+2. DO NOT reject items for standard usage wear, minor surface scratches, cosmetic marks, fading, peeling, or scuffs. The presence of wear is normal and expected, and MUST NOT be used as a reason to reject the item.
+3. Reject items ONLY if they are torn to pieces, completely broken/shattered/unusable, extremely filthy/muddy/dirty, or heavily stained with blood/mold.
+4. If the item is in good, clean, wearable/usable condition, you MUST approve it (status: approved, safetyScore 75-100).
+5. If it is acceptable but worn/used, score it 50-74 (status: approved or needs_review). Reject ONLY if completely unusable (0-49).
 
-Respond ONLY in JSON:
-
+Respond ONLY in JSON format:
 {
   "status": "approved" | "needs_review" | "rejected",
-  "safetyScore": number,
-  "reason": "short reason",
+  "safetyScore": number (0-100),
+  "reason": "short detailed reason explaining condition",
   "keywords": ["keyword1", "keyword2"],
-  "classifiedCategory": "Clothes" | "Household" | "Grocery" | "Medicine" | "Food" | "Other"
+  "classifiedCategory": "Clothes" | "Household" | "Grocery" | "Other"
 }
-
-RULES:
-- Good, usable condition → score 70-100 (approved)
-- Acceptable but worn/used → score 50-69 (needs_review)
-- Damaged, unsafe, or unusable → score 0-49 (rejected)
-- safetyScore MUST be a number between 0-100.
-- Output ONLY JSON
 `;
-      }
+        }
+      };
 
-      // Build parts array dynamically with text prompt and all images
-      const parts = [{ text: prompt }];
-      
-      for (const img of imageList) {
-        if (!img) continue;
+      const analyzeSingleImage = async (img, idx, total) => {
         const base64Data = img.includes(',') ? img.split(',')[1] : img;
-        
         let mimeType = "image/jpeg";
         if (img.startsWith("data:image/png")) mimeType = "image/png";
         else if (img.startsWith("data:image/webp")) mimeType = "image/webp";
 
-        parts.push({
-          inlineData: {
-            data: base64Data,
-            mimeType: mimeType
-          }
+        const prompt = getPromptForIndex(category, idx, total);
+
+        const result = await model.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType
+                  }
+                }
+              ]
+            }
+          ]
         });
-      }
 
-      const result = await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: parts
+        const rawText = result.response.text().trim();
+        const jsonMatch = rawText.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error("No JSON in AI response");
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
+
+        let safetyScore = Math.round(Number(parsed.safetyScore) || 60);
+        let status = parsed.status || 'needs_review';
+
+        // Normalize status
+        if (status === 'valid' || status === 'approved' || status === 'success') {
+          status = 'approved';
+        } else if (status === 'rejected' || status === 'reject' || status === 'invalid') {
+          status = 'rejected';
+        }
+
+        if (safetyScore < 50) {
+          status = 'rejected';
+        } else if (safetyScore < 70 && status === 'approved') {
+          status = 'needs_review';
+        } else if (safetyScore >= 70 && status === 'needs_review') {
+          status = 'approved';
+        }
+
+        return {
+          status,
+          safetyScore,
+          reason: parsed.reason || 'AI analysis complete',
+          keywords: parsed.keywords || [],
+          classifiedCategory: cleanToStandardCategory(parsed.classifiedCategory || category || 'Other')
+        };
+      };
+
+      // Perform analysis on all images in parallel
+      const individualResults = await Promise.all(imageList.map(async (img, idx) => {
+        try {
+          const singleResult = await analyzeSingleImage(img, idx, imageList.length);
+          
+          // Medicine specific OCR check in parallel
+          if (singleResult.classifiedCategory === 'Medicine' && singleResult.status !== 'rejected') {
+            try {
+              const ocr = await aiService.extractExpiry(img);
+              if (!ocr.isValid) {
+                if (ocr.message && (ocr.message.includes('expired') || ocr.message.includes('future') || ocr.message.includes('before the manufacturing'))) {
+                  singleResult.status = 'rejected';
+                  singleResult.safetyScore = 20;
+                  singleResult.reason = `Medicine Safety Validation failed: ${ocr.message}`;
+                } else {
+                  singleResult.safetyScore = Math.max(30, singleResult.safetyScore - 20);
+                  singleResult.reason += ` | OCR Warning: ${ocr.message || 'No date found'}`;
+                }
+              } else {
+                singleResult.reason += ` | OCR Found Expiry: ${ocr.expiryDate}`;
+              }
+            } catch (ocrErr) {
+              console.warn(`OCR failed for image index ${idx}:`, ocrErr.message);
+            }
           }
-        ]
-      });
 
-      const rawText = result.response.text().trim();
-      console.log("=== RAW GEMINI RESPONSE ===\n", rawText, "\n===================");
+          return {
+            img,
+            idx,
+            success: true,
+            result: singleResult
+          };
+        } catch (err) {
+          console.error(`AI analysis failed for image index ${idx}:`, err.message);
+          return {
+            img,
+            idx,
+            success: false,
+            error: err.message
+          };
+        }
+      }));
 
-      // Extract JSON block - handle markdown fences too
-      const jsonMatch = rawText.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error("❌ No JSON found in Gemini response:", rawText);
-        throw new Error("No JSON in AI response");
-      }
+      const safeItems = [];
+      const unsafeItems = [];
+      let combinedReason = imageList.length > 1 ? "Multi-Image Evaluation Report:" : "Evaluation Report:";
+      let combinedKeywords = [];
+      let scoreSum = 0;
+      let approvedCount = 0;
+      let categoriesFound = [];
 
-      const parsed = JSON.parse(jsonMatch[0]);
-      console.log("=== PARSED AI DATA ===", parsed);
+      for (const item of individualResults) {
+        const imgLabel = `Image ${item.idx + 1}`;
+        if (!item.success) {
+          unsafeItems.push(item.img);
+          combinedReason += `\n- ${imgLabel}: Failed to analyze (${item.error}).`;
+          continue;
+        }
 
-      // Convert score to number (handles both "85" string and 85 integer from Gemini)
-      const rawScore = Number(parsed.safetyScore);
+        const res = item.result;
+        combinedKeywords.push(...res.keywords);
+        categoriesFound.push(res.classifiedCategory);
 
-      if (isNaN(rawScore) || !parsed.status) {
-        console.error("❌ Invalid AI data - score:", parsed.safetyScore, "status:", parsed.status);
-        throw new Error("AI returned invalid safetyScore or status");
-      }
-
-      let safetyScore = Math.round(rawScore);
-      let status = parsed.status || 'needs_review';
-
-      // Enforce absolute safety consistency:
-      // If AI flagged status as rejected, score must reflect rejection (below 50)
-      if (status === 'rejected' || status === 'reject') {
-        status = 'rejected';
-        if (safetyScore >= 50) {
-          safetyScore = Math.floor(Math.random() * 20) + 15; // 15-35%
+        if (res.status === 'rejected' || res.safetyScore < 50) {
+          unsafeItems.push(item.img);
+          combinedReason += `\n- ${imgLabel} (${res.classifiedCategory}): Rejected - ${res.reason}`;
+        } else {
+          safeItems.push(item.img);
+          approvedCount++;
+          scoreSum += res.safetyScore;
+          combinedReason += `\n- ${imgLabel} (${res.classifiedCategory}): Approved (${res.safetyScore}%) - ${res.reason}`;
         }
       }
 
-      // If score is low, status must be rejected
-      if (safetyScore < 50) {
-        status = 'rejected';
-      } else if (safetyScore < 70) {
-        status = 'needs_review';
-      } else {
-        status = 'approved';
+      let finalStatus = 'rejected';
+      let finalScore = 0;
+      if (approvedCount > 0) {
+        finalScore = Math.round(scoreSum / approvedCount);
+        finalStatus = finalScore >= 70 ? 'approved' : 'needs_review';
       }
 
-      console.log(`=== AI RECONCILED SCORE: ${safetyScore} | FINAL STATUS: ${status} ===`);
+      const mainCategory = categoriesFound.length > 0 ? categoriesFound[0] : (category || 'Other');
 
       return {
-        status,
-        safetyScore,
-        reason: parsed.reason || 'AI analysis complete',
-        keywords: parsed.keywords || [],
-        classifiedCategory: cleanToStandardCategory(
-          (parsed.classifiedCategory && parsed.classifiedCategory !== 'Other')
-            ? parsed.classifiedCategory
-            : (category || 'Other')
-        )
+        status: finalStatus,
+        safetyScore: finalScore,
+        reason: combinedReason,
+        keywords: [...new Set(combinedKeywords)],
+        classifiedCategory: cleanToStandardCategory(mainCategory),
+        safeImages: safeItems,
+        hasRejectedItems: unsafeItems.length > 0
       };
 
     } catch (err) {
       console.error('❌ Gemini analyzeItem FAILED, switching to MobileNetV2 Fallback:', err.message);
       try {
+        const imageBase64 = imageList[0] || '';
         const response = await callPythonService('POST', '/analyze-food', { imageBase64 });
         const fallbackData = response;
         return {
@@ -249,7 +321,8 @@ RULES:
           safetyScore: fallbackData.safetyScore,
           reason: `[Local Fallback Model MobileNetV2]: ${fallbackData.reason}`,
           keywords: fallbackData.detectedClasses || [],
-          classifiedCategory: cleanToStandardCategory(category || 'Other')
+          classifiedCategory: cleanToStandardCategory(category || 'Other'),
+          safeImages: imageList
         };
       } catch (fallbackErr) {
         console.error('❌ Local MobileNetV2 Fallback FAILED:', fallbackErr.message);
@@ -258,7 +331,8 @@ RULES:
           safetyScore: 55,
           reason: "AI service error — manual review required",
           keywords: [],
-          classifiedCategory: cleanToStandardCategory(category || 'Other')
+          classifiedCategory: cleanToStandardCategory(category || 'Other'),
+          safeImages: imageList
         };
       }
     }

@@ -709,6 +709,11 @@ const ContributorPortal = () => {
 
     setActiveTab('ai_dashboard');
     setIsScanning(true);
+    setAiError(null);
+    setAiResult(null);
+    setAiMatches([]);
+    setFallbackNGOs([]);
+    setScanComplete(false);
 
     try {
       const fileToBase64 = (f) => new Promise((resolve, reject) => {
@@ -753,7 +758,8 @@ const ContributorPortal = () => {
         condition: condition || (res.data.isSealed ? 'Sealed/New' : 'Open/Used'),
         freshness: res.data.status === 'rejected' ? 'Spoiled/Unsafe' : 'Verified',
         estimatedItems: res.data.quantity || 'Unknown',
-        matchReason: res.data.status === 'rejected' ? 'Safety limits exceeded. Item blocked.' : 'Matched to nearby demand based on AI engine.'
+        matchReason: res.data.status === 'rejected' ? 'Safety limits exceeded. Item blocked.' : 'Matched to nearby demand based on AI engine.',
+        imageUrl: res.data.imageUrl?.[0] || (files[0] ? files[0].preview : null)
       });
 
       // Query backend database matching suggestions for the AI classified category
@@ -810,7 +816,7 @@ const ContributorPortal = () => {
       setSelectedPost(null);
       setSelectedMapPost(null);
       setActiveTab('my_donations');
-      setFile(null); setCategory(''); setLocation(''); setScanComplete(false);
+      setFiles([]); setCategory(''); setLocation(''); setScanComplete(false);
       setCurrentDonationId(null);
       setAiKeywords([]);
       fetchData(); // refresh
@@ -1443,9 +1449,9 @@ const ContributorPortal = () => {
                     
                     {/* Status Hero Card (Scanned Image, Title, Score gauge) */}
                     <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-xl)', padding: '1.75rem', position: 'relative', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                      {files[0]?.preview && (
+                      {(aiResult?.imageUrl || files[0]?.preview) && (
                         <div style={{ width: '130px', height: '130px', borderRadius: '12px', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.15)', cursor: 'pointer', position: 'relative', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)', flexShrink: 0 }} onClick={() => setIsImageZoomed(true)}>
-                          <img src={files[0].preview} alt="Scanned preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={aiResult.imageUrl || files[0].preview} alt="Scanned preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.3s ease', color: 'white', fontWeight: 700, fontSize: '0.75rem' }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0}>🔍 Zoom</div>
                         </div>
                       )}
@@ -1700,7 +1706,7 @@ const ContributorPortal = () => {
                   <button
                     className="btn btn-secondary"
                     onClick={() => {
-                      setFile(null);
+                      setFiles([]);
                       setScanComplete(false);
                       setAiResult(null);
                       setDonTitle('');
@@ -1746,7 +1752,7 @@ const ContributorPortal = () => {
               </div>
               <button
                 className="btn btn-primary"
-                onClick={() => { setActiveTab('home'); setFile(null); }}
+                onClick={() => { setActiveTab('home'); setFiles([]); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <UploadCloud size={16} /> {t(lang, 'New Donation', 'نیا عطیہ')}
@@ -2961,10 +2967,10 @@ const ContributorPortal = () => {
         </div>
       )}
 
-      {isImageZoomed && files[0]?.preview && (
+      {isImageZoomed && (aiResult?.imageUrl || files[0]?.preview) && (
         <div className="modal-overlay" onClick={() => setIsImageZoomed(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(3, 7, 18, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <button onClick={() => setIsImageZoomed(false)} style={{ position: 'absolute', top: 24, right: 24, color: 'white', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-          <img src={files[0].preview} alt="Zoomed View" style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '16px' }} onClick={e => e.stopPropagation()} />
+          <img src={aiResult.imageUrl || files[0].preview} alt="Zoomed View" style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '16px' }} onClick={e => e.stopPropagation()} />
         </div>
       )}
 

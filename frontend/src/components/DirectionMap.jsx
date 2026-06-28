@@ -175,70 +175,116 @@ export default function DirectionMap({ donorLat, donorLng, receiverLat, receiver
 
           setMapLoaded(true);
         } else {
-          setUseLeaflet(false);
-          const maps = await loadGoogleMaps(GMAPS_KEY);
-          if (!mapRef.current) return;
+          try {
+            setUseLeaflet(false);
+            const maps = await loadGoogleMaps(GMAPS_KEY);
+            if (!mapRef.current) return;
 
-          const map = new maps.Map(mapRef.current, {
-            center: { lat: dLat, lng: dLng },
-            zoom: 12,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
-          });
+            const map = new maps.Map(mapRef.current, {
+              center: { lat: dLat, lng: dLng },
+              zoom: 12,
+              mapTypeControl: false,
+              streetViewControl: false,
+              fullscreenControl: false,
+            });
 
-          // Donor marker
-          new maps.Marker({
-            position: { lat: dLat, lng: dLng },
-            map,
-            title: 'Donor Location' + (donorCoords.fallback ? ' (City Center Fallback)' : ''),
-            icon: {
-              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: '#3b82f6',
-              fillOpacity: 1,
-              strokeWeight: 1.5,
-              strokeColor: 'white',
-              scale: 1.8,
-              anchor: new maps.Point(12, 22),
-            }
-          });
+            // Donor marker
+            new maps.Marker({
+              position: { lat: dLat, lng: dLng },
+              map,
+              title: 'Donor Location' + (donorCoords.fallback ? ' (City Center Fallback)' : ''),
+              icon: {
+                path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+                fillColor: '#3b82f6',
+                fillOpacity: 1,
+                strokeWeight: 1.5,
+                strokeColor: 'white',
+                scale: 1.8,
+                anchor: new maps.Point(12, 22),
+              }
+            });
 
-          // Receiver marker
-          new maps.Marker({
-            position: { lat: rLat, lng: rLng },
-            map,
-            title: (receiverName || 'Receiver') + (receiverCoords.fallback ? ' (City Center Fallback)' : ''),
-            icon: {
-              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: '#10b981',
-              fillOpacity: 1,
-              strokeWeight: 1.5,
-              strokeColor: 'white',
-              scale: 1.8,
-              anchor: new maps.Point(12, 22),
-            }
-          });
+            // Receiver marker
+            new maps.Marker({
+              position: { lat: rLat, lng: rLng },
+              map,
+              title: (receiverName || 'Receiver') + (receiverCoords.fallback ? ' (City Center Fallback)' : ''),
+              icon: {
+                path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+                fillColor: '#10b981',
+                fillOpacity: 1,
+                strokeWeight: 1.5,
+                strokeColor: 'white',
+                scale: 1.8,
+                anchor: new maps.Point(12, 22),
+              }
+            });
 
-          // Polyline path
-          const polyline = new maps.Polyline({
-            path: [
-              { lat: dLat, lng: dLng },
-              { lat: rLat, lng: rLng }
-            ],
-            geodesic: true,
-            strokeColor: '#10b981',
-            strokeOpacity: 0.8,
-            strokeWeight: 4
-          });
-          polyline.setMap(map);
+            // Polyline path
+            const polyline = new maps.Polyline({
+              path: [
+                { lat: dLat, lng: dLng },
+                { lat: rLat, lng: rLng }
+              ],
+              geodesic: true,
+              strokeColor: '#10b981',
+              strokeOpacity: 0.8,
+              strokeWeight: 4
+            });
+            polyline.setMap(map);
 
-          // Fit bounds
-          const bounds = new maps.LatLngBounds();
-          bounds.extend({ lat: dLat, lng: dLng });
-          bounds.extend({ lat: rLat, lng: rLng });
-          map.fitBounds(bounds);
+            // Fit bounds
+            const bounds = new maps.LatLngBounds();
+            bounds.extend({ lat: dLat, lng: dLng });
+            bounds.extend({ lat: rLat, lng: rLng });
+            map.fitBounds(bounds);
 
-          setMapLoaded(true);
+            setMapLoaded(true);
+          } catch (gMapsErr) {
+            console.warn("Failed to load Google Maps. Falling back to Leaflet.", gMapsErr.message);
+            setUseLeaflet(true);
+            const L = await loadLeaflet();
+            if (!mapRef.current) return;
+
+            const map = L.map(mapRef.current).setView([dLat, dLng], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Donor marker
+            const donorIcon = L.divIcon({
+              html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#3b82f6" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="white" stroke-width="1.5"/></svg>`,
+              className: 'custom-leaflet-pin',
+              iconSize: [36, 36],
+              iconAnchor: [18, 36],
+              popupAnchor: [0, -36]
+            });
+            L.marker([dLat, dLng], { icon: donorIcon }).addTo(map).bindPopup('Donor Location' + (donorCoords.fallback ? ' (City Center Fallback)' : ''));
+
+            // Receiver marker
+            const recIcon = L.divIcon({
+              html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="#10b981" style="filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="white" stroke-width="1.5"/></svg>`,
+              className: 'custom-leaflet-pin',
+              iconSize: [36, 36],
+              iconAnchor: [18, 36],
+              popupAnchor: [0, -36]
+            });
+            L.marker([rLat, rLng], { icon: recIcon }).addTo(map).bindPopup((receiverName || 'Receiver') + (receiverCoords.fallback ? ' (City Center Fallback)' : ''));
+
+            // Route Polyline
+            L.polyline([[dLat, dLng], [rLat, rLng]], {
+              color: '#10b981',
+              weight: 4,
+              opacity: 0.8,
+              dashArray: '5, 10'
+            }).addTo(map);
+
+            // Fit bounds
+            const bounds = L.latLngBounds([[dLat, dLng], [rLat, rLng]]);
+            map.fitBounds(bounds, { padding: [40, 40] });
+
+            setMapLoaded(true);
+          }
         }
       } catch (err) {
         setMapError('Failed to load map: ' + err.message);
