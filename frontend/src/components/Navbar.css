@@ -1,7 +1,9 @@
 /* Navbar.css — Premium Dark Glassmorphic */
 .navbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 999;
   background: rgba(10,15,26,0.85);
   backdrop-filter: blur(24px);

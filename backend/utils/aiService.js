@@ -200,6 +200,62 @@ Respond ONLY in JSON format:
           status = 'rejected';
         }
 
+        // Programmatic overrides to prevent false-positives based on platform policy
+        const detectedCat = cleanToStandardCategory(parsed.classifiedCategory || category || 'Other');
+        const reasonLower = (parsed.reason || '').toLowerCase();
+
+        if (detectedCat === 'Food') {
+          // If food is rejected/flagged purely due to being home-cooked, unsealed, or lacking commercial packaging/seals
+          const hasCommercialPackagingRejection = reasonLower.includes('unsealed') || 
+                                                  reasonLower.includes('unpackaged') || 
+                                                  reasonLower.includes('open meal') || 
+                                                  reasonLower.includes('prepared meal') || 
+                                                  reasonLower.includes('home-cooked') || 
+                                                  reasonLower.includes('homemade') || 
+                                                  reasonLower.includes('non-hermetic') || 
+                                                  reasonLower.includes('hermetically') || 
+                                                  reasonLower.includes('hygiene standard') || 
+                                                  reasonLower.includes('preparation environment') || 
+                                                  reasonLower.includes('commercial packaging') || 
+                                                  reasonLower.includes('liability');
+          
+          const hasSevereSpoilage = reasonLower.includes('spoiled') || 
+                                    reasonLower.includes('mold') || 
+                                    reasonLower.includes('rotten') || 
+                                    reasonLower.includes('decay') || 
+                                    reasonLower.includes('expired') || 
+                                    reasonLower.includes('smell') || 
+                                    reasonLower.includes('stale');
+
+          if (hasCommercialPackagingRejection && !hasSevereSpoilage) {
+            status = 'approved';
+            safetyScore = Math.max(85, safetyScore);
+            parsed.reason = `[System Approved Cooked Meal] Freshly prepared meal accepted: ${parsed.reason}`;
+          }
+        } else if (detectedCat === 'Clothes') {
+          // If clothes are rejected purely due to standard wear, fading, minor scuffs, or peeling
+          const hasMinorWearRejection = reasonLower.includes('wear') || 
+                                        reasonLower.includes('surface damage') || 
+                                        reasonLower.includes('fading') || 
+                                        reasonLower.includes('scuff') || 
+                                        reasonLower.includes('peeling') || 
+                                        reasonLower.includes('used') || 
+                                        reasonLower.includes('pre-loved');
+
+          const hasSevereDamage = reasonLower.includes('torn to pieces') || 
+                                  reasonLower.includes('filthy') || 
+                                  reasonLower.includes('mold') || 
+                                  reasonLower.includes('blood') || 
+                                  reasonLower.includes('shredded') || 
+                                  reasonLower.includes('completely broken');
+
+          if (hasMinorWearRejection && !hasSevereDamage) {
+            status = 'approved';
+            safetyScore = Math.max(80, safetyScore);
+            parsed.reason = `[System Approved Used Item] Pre-loved item accepted: ${parsed.reason}`;
+          }
+        }
+
         if (safetyScore < 50) {
           status = 'rejected';
         } else if (safetyScore < 70 && status === 'approved') {
@@ -213,7 +269,7 @@ Respond ONLY in JSON format:
           safetyScore,
           reason: parsed.reason || 'AI analysis complete',
           keywords: parsed.keywords || [],
-          classifiedCategory: cleanToStandardCategory(parsed.classifiedCategory || category || 'Other')
+          classifiedCategory: detectedCat
         };
       };
 

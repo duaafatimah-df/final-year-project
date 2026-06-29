@@ -7,3 +7,8 @@
 main {
   flex: 1;
 }
+
+/* Offset content when fixed navbar is active on public pages */
+.app-container:has(.navbar) main {
+  padding-top: 66px;
+}
